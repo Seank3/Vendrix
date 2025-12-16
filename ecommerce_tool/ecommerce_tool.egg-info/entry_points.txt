@@ -1,0 +1,2 @@
+[console_scripts]
+ecomtool = ecommerce_tool.main:run
