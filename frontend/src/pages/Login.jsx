@@ -1,138 +1,139 @@
 import React, { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
-import { Mail, Lock, Eye, EyeOff, Package } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react'
 import { authAPI } from '../services/api'
 
-const Login = () => {
-  const [email, setEmail] = useState('')
+export default function Login() {
+  const [email, setEmail]     = useState('')
   const [password, setPassword] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
+  const [showPwd, setShowPwd] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [error, setError]     = useState('')
   const navigate = useNavigate()
 
-  const handleLogin = async (e) => {
+  const submit = async (e) => {
     e.preventDefault()
-    setLoading(true)
-    setError('')
-
+    setLoading(true); setError('')
     try {
-      const response = await authAPI.login({
-        email: email, // Django expects 'email' field for login
-        password: password
-      })
-
-      // Store the JWT token
-      if (response.token) {
-        localStorage.setItem('auth_token', response.token)
-        navigate('/dashboard')
-      } else {
-        setError('Invalid response from server')
-      }
+      const r = await authAPI.login({ email, password })
+      if (r.token) { localStorage.setItem('auth_token', r.token); navigate('/dashboard') }
+      else setError('Invalid response from server.')
     } catch (err) {
-      console.error('Login error:', err)
-      if (err.response?.data?.detail) {
-        setError(err.response.data.detail)
-      } else if (err.response?.data?.non_field_errors) {
-        setError(err.response.data.non_field_errors[0])
-      } else {
-        setError('Login failed. Please check your credentials.')
-      }
-    } finally {
-      setLoading(false)
-    }
+      setError(err.response?.data?.detail || err.response?.data?.non_field_errors?.[0] || 'Incorrect email or password.')
+    } finally { setLoading(false) }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      <div className="w-full max-w-md glass border border-gray-700 rounded-2xl p-8 shadow-2xl">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <Package className="w-8 h-8 text-white" />
+    <div style={{ minHeight: '100vh', background: 'var(--bg-base)', display: 'flex' }}>
+      {/* Left panel — branding */}
+      <div style={{
+        width: '42%', background: 'var(--indigo)',
+        display: 'none', flexDirection: 'column', justifyContent: 'space-between',
+        padding: '48px 52px',
+      }} id="vx-login-panel">
+        <style>{`@media(min-width:960px){#vx-login-panel{display:flex !important;}}`}</style>
+
+        {/* Logo */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 34, height: 34, borderRadius: 8, background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <svg width="18" height="18" viewBox="0 0 16 16" fill="none">
+              <polyline points="3,4 8,11 13,4" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+              <circle cx="3" cy="4" r="1.7" fill="white"/>
+              <circle cx="13" cy="4" r="1.7" fill="white"/>
+              <circle cx="8" cy="11" r="1.7" fill="white"/>
+            </svg>
           </div>
-          <h1 className="text-3xl font-bold text-white mb-2">Welcome Back</h1>
-          <p className="text-gray-400">
-            Sign in to your Ecommerce Dashboard
+          <span style={{ color: 'white', fontWeight: 700, fontSize: 16, letterSpacing: '-0.02em' }}>Vendrix</span>
+        </div>
+
+        {/* Center copy */}
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.5)', marginBottom: 16 }}>Commerce Infrastructure</div>
+          <h2 style={{ fontSize: 28, fontWeight: 700, color: 'white', lineHeight: 1.25, letterSpacing: '-0.02em', marginBottom: 16 }}>
+            The operational backbone for African commerce.
+          </h2>
+          <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.65)', lineHeight: 1.7, maxWidth: 360 }}>
+            Unified inventory, orders, and channel sync across Shopify, Jumia, WhatsApp, and Odoo — in one control center.
+          </p>
+          <div style={{ marginTop: 40, display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {['Multi-channel order management', 'Real-time inventory sync', 'WhatsApp commerce integration', 'Enterprise RBAC and audit logs'].map(f => (
+              <div key={f} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 18, height: 18, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <svg width="9" height="9" viewBox="0 0 12 12" fill="none"><polyline points="2,6 5,9 10,3" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                </div>
+                <span style={{ fontSize: 13.5, color: 'rgba(255,255,255,0.8)' }}>{f}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)' }}>© 2026 Heras Technology. All rights reserved.</div>
+      </div>
+
+      {/* Right panel — form */}
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px 24px' }}>
+        <div style={{ width: '100%', maxWidth: 380 }}>
+          {/* Mobile logo */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 32 }} id="vx-mobile-logo">
+            <style>{`@media(min-width:960px){#vx-mobile-logo{display:none !important;}}`}</style>
+            <div style={{ width: 30, height: 30, borderRadius: 7, background: 'var(--indigo)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <polyline points="3,4 8,11 13,4" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+                <circle cx="3" cy="4" r="1.7" fill="white"/>
+                <circle cx="13" cy="4" r="1.7" fill="white"/>
+                <circle cx="8" cy="11" r="1.7" fill="white"/>
+              </svg>
+            </div>
+            <span style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)' }}>Vendrix</span>
+          </div>
+
+          <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 6 }}>Sign in</h1>
+          <p style={{ fontSize: 13.5, color: 'var(--text-tertiary)', marginBottom: 28 }}>Access your Vendrix control center</p>
+
+          <form onSubmit={submit}>
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ display: 'block', fontSize: 12.5, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 5 }}>Email address</label>
+              <div style={{ position: 'relative' }}>
+                <Mail size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
+                <input type="email" value={email} onChange={e => setEmail(e.target.value)} required autoFocus
+                  className="vx-input" style={{ paddingLeft: 32 }} placeholder="you@organization.com" />
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ display: 'block', fontSize: 12.5, fontWeight: 500, color: 'var(--text-secondary)', marginBottom: 5 }}>Password</label>
+              <div style={{ position: 'relative' }}>
+                <Lock size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
+                <input type={showPwd ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} required
+                  className="vx-input" style={{ paddingLeft: 32, paddingRight: 36 }} placeholder="••••••••" />
+                <button type="button" tabIndex={-1} onClick={() => setShowPwd(v => !v)}
+                  style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 3 }}>
+                  {showPwd ? <EyeOff size={14} /> : <Eye size={14} />}
+                </button>
+              </div>
+            </div>
+
+            {error && (
+              <div style={{ padding: '9px 12px', marginBottom: 14, background: 'var(--red-bg)', border: '1px solid var(--red-border)', borderRadius: 6, fontSize: 13, color: 'var(--red)' }}>{error}</div>
+            )}
+
+            <button type="submit" disabled={loading} className="vx-btn vx-btn-primary"
+              style={{ width: '100%', justifyContent: 'center', height: 38, fontSize: 14, opacity: loading ? 0.7 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}>
+              {loading ? (
+                <><span style={{ width: 14, height: 14, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: 'white', borderRadius: '50%', animation: 'spin 0.7s linear infinite', display: 'inline-block' }} /> Signing in…</>
+              ) : (
+                <>Sign in <ArrowRight size={14} /></>
+              )}
+            </button>
+          </form>
+
+          <p style={{ marginTop: 24, fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>
+            Vendrix · by Heras Technology
           </p>
         </div>
-
-        {/* Form */}
-        <form onSubmit={handleLogin}>
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-400 mb-2">
-              Email Address
-            </label>
-            <div className="relative">
-              <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Enter your email"
-                required
-              />
-            </div>
-          </div>
-
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-400 mb-2">
-              Password
-            </label>
-            <div className="relative">
-              <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-10 pr-12 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Enter your password"
-                required
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white"
-              >
-                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-              </button>
-            </div>
-          </div>
-
-          {/* Error Message */}
-          {error && (
-            <div className="p-3 bg-red-900/20 border border-red-800 rounded-lg text-red-400 text-sm mb-6">
-              {error}
-            </div>
-          )}
-
-          {/* Login Button */}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 text-white font-medium py-3 px-4 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-900 mb-4"
-          >
-            {loading ? 'Signing in...' : 'Sign In'}
-          </button>
-
-          {/* Links */}
-          <div className="text-center text-sm text-gray-400">
-            <Link to="#" className="text-blue-500 hover:text-blue-400 transition-colors">
-              Forgot password?
-            </Link>
-          </div>
-        </form>
-
-        {/* Security Note */}
-        <div className="mt-8 p-4 bg-green-900/10 border border-green-800 rounded-lg text-center">
-          <div className="text-green-400 text-sm font-medium">
-            🔒 Your data is secure and encrypted
-          </div>
-        </div>
       </div>
+
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   )
 }
-
-export default Login

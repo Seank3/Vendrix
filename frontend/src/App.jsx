@@ -1,123 +1,50 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
-import AuthLayout from './layouts/AuthLayout'
 import DashboardLayout from './layouts/DashboardLayout'
 import ToastContainer from './components/Toast'
 
-// Import pages directly to avoid lazy loading issues
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
-import Analytics from './pages/Analytics'
+import Products from './pages/Products'
+import Inventory from './pages/Inventory'
 import Orders from './pages/Orders'
-import Users from './pages/Users'
 import Integrations from './pages/Integrations'
+import Organizations from './pages/Organizations'
+import Analytics from './pages/Analytics'
+import Events from './pages/Events'
 import Settings from './pages/Settings'
 
-// Protected Route Component
 const ProtectedRoute = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [loading, setLoading] = useState(true)
-
   useEffect(() => {
-    const token = localStorage.getItem('auth_token')
-    setIsAuthenticated(!!token)
+    setIsAuthenticated(!!localStorage.getItem('auth_token'))
     setLoading(false)
   }, [])
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-white">Loading...</div>
-      </div>
-    )
-  }
-
+  if (loading) return <div style={{ minHeight: '100vh', background: '#FAFAFA', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ color: '#64748B', fontSize: 14 }}>Loading…</span></div>
   return isAuthenticated ? children : <Navigate to="/login" replace />
 }
+
+const Protected = ({ children }) => <ProtectedRoute><DashboardLayout>{children}</DashboardLayout></ProtectedRoute>
 
 function App() {
   return (
     <>
       <Routes>
-        {/* Auth routes */}
-        <Route
-          path="/login"
-          element={
-            <AuthLayout>
-              <Login />
-            </AuthLayout>
-          }
-        />
-
-        {/* Protected Dashboard routes */}
-        <Route
-          path="/dashboard"
-          element={
-            <ProtectedRoute>
-              <DashboardLayout>
-                <Dashboard />
-              </DashboardLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/analytics"
-          element={
-            <ProtectedRoute>
-              <DashboardLayout>
-                <Analytics />
-              </DashboardLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/orders"
-          element={
-            <ProtectedRoute>
-              <DashboardLayout>
-                <Orders />
-              </DashboardLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/users"
-          element={
-            <ProtectedRoute>
-              <DashboardLayout>
-                <Users />
-              </DashboardLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/integrations"
-          element={
-            <ProtectedRoute>
-              <DashboardLayout>
-                <Integrations />
-              </DashboardLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/settings"
-          element={
-            <ProtectedRoute>
-              <DashboardLayout>
-                <Settings />
-              </DashboardLayout>
-            </ProtectedRoute>
-          }
-        />
-
-        {/* Default redirect */}
+        <Route path="/login" element={<Login />} />
+        <Route path="/dashboard"     element={<Protected><Dashboard /></Protected>} />
+        <Route path="/products"      element={<Protected><Products /></Protected>} />
+        <Route path="/inventory"     element={<Protected><Inventory /></Protected>} />
+        <Route path="/orders"        element={<Protected><Orders /></Protected>} />
+        <Route path="/integrations"  element={<Protected><Integrations /></Protected>} />
+        <Route path="/organizations" element={<Protected><Organizations /></Protected>} />
+        <Route path="/analytics"     element={<Protected><Analytics /></Protected>} />
+        <Route path="/events"        element={<Protected><Events /></Protected>} />
+        <Route path="/settings"      element={<Protected><Settings /></Protected>} />
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
       </Routes>
-
       <ToastContainer />
     </>
   )
 }
-
 export default App

@@ -1,11 +1,3 @@
-import React from 'react'
-
-const AuthLayout = ({ children }) => {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-900 p-4">
-      {children}
-    </div>
-  )
-}
-
+// AuthLayout just passes children through — Login handles its own full-page layout
+const AuthLayout = ({ children }) => children
 export default AuthLayout

@@ -1,95 +1,165 @@
 import React, { useState } from 'react'
-import { Settings, CheckCircle, XCircle } from 'lucide-react'
+import { CheckCircle, XCircle, Settings, Zap, ExternalLink } from 'lucide-react'
+
+const platforms = [
+  { id: 'shopify',     name: 'Shopify',     emoji: '🛒', desc: 'Full-featured e-commerce platform',       category: 'Marketplace' },
+  { id: 'woocommerce', name: 'WooCommerce', emoji: '📦', desc: 'WordPress-powered online store',          category: 'Marketplace' },
+  { id: 'jumia',       name: 'Jumia',       emoji: '🌍', desc: "Africa's leading e-commerce marketplace", category: 'Africa' },
+  { id: 'jiji',        name: 'Jiji',        emoji: '📱', desc: 'East African classifieds platform',       category: 'Africa' },
+  { id: 'etsy',        name: 'Etsy',        emoji: '🎨', desc: 'Global handmade & vintage marketplace',   category: 'Marketplace' },
+  { id: 'ebay',        name: 'eBay',        emoji: '🔨', desc: 'Global auction & buy-it-now platform',    category: 'Marketplace' },
+  { id: 'kilimall',    name: 'Kilimall',    emoji: '🏪', desc: 'East Africa e-commerce platform',        category: 'Africa' },
+  { id: 'flutterwave', name: 'Flutterwave', emoji: '💳', desc: 'Pan-African payment infrastructure',     category: 'Payments' },
+  { id: 'mtn',         name: 'MTN MoMo',    emoji: '📲', desc: 'Mobile money for Uganda & beyond',        category: 'Payments' },
+]
+
+const categories = ['All', 'Marketplace', 'Africa', 'Payments']
 
 const Integrations = () => {
-  const [integrations, setIntegrations] = useState({
-    etsy: true,
-    shopify: false,
-    woocommerce: true,
-    ebay: false,
-    jumia: false,
-    jiji: false
-  })
+  const [connected, setConnected] = useState({ etsy: true, woocommerce: true, mtn: true })
+  const [filter, setFilter] = useState('All')
+  const [configuring, setConfiguring] = useState(null)
 
-  const platforms = [
-    { id: 'etsy', name: 'Etsy', icon: '🎨', description: 'Handmade marketplace' },
-    { id: 'shopify', name: 'Shopify', icon: '🛒', description: 'E-commerce platform' },
-    { id: 'woocommerce', name: 'WooCommerce', icon: '📦', description: 'WordPress plugin' },
-    { id: 'ebay', name: 'eBay', icon: '🔨', description: 'Auction marketplace' },
-    { id: 'jumia', name: 'Jumia', icon: '🌍', description: 'African marketplace' },
-    { id: 'jiji', name: 'Jiji', icon: '📱', description: 'Classifieds platform' }
-  ]
+  const toggle = (id) => setConnected(prev => ({ ...prev, [id]: !prev[id] }))
 
-  const toggleIntegration = (id) => {
-    setIntegrations(prev => ({
-      ...prev,
-      [id]: !prev[id]
-    }))
-  }
+  const visible = platforms.filter(p => filter === 'All' || p.category === filter)
+
+  const connectedCount = Object.values(connected).filter(Boolean).length
 
   return (
     <div>
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-white mb-2">Integrations</h1>
-        <p className="text-lg text-gray-400">Connect and manage your e-commerce platforms</p>
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
+        <div>
+          <h2 style={{ fontFamily: '"Bricolage Grotesque", system-ui, sans-serif', fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 0.3rem', letterSpacing: '-0.02em' }}>Integrations</h2>
+          <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', margin: 0 }}>
+            <span style={{ color: '#34d399', fontWeight: 600 }}>{connectedCount} connected</span> · Connect your sales channels
+          </p>
+        </div>
+        {/* Filter tabs */}
+        <div style={{ display: 'flex', gap: 4, background: 'var(--surface-overlay)', border: '1px solid var(--surface-border)', borderRadius: 10, padding: 4 }}>
+          {categories.map(cat => (
+            <button
+              key={cat}
+              onClick={() => setFilter(cat)}
+              style={{
+                padding: '0.4rem 0.85rem', borderRadius: 7, border: 'none',
+                background: filter === cat ? 'var(--surface-hover)' : 'transparent',
+                color: filter === cat ? 'var(--text-primary)' : 'var(--text-muted)',
+                fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer',
+                transition: 'all 0.15s',
+              }}
+            >{cat}</button>
+          ))}
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {platforms.map((platform) => (
-          <div key={platform.id} className="bg-gray-800 border border-gray-700 rounded-lg p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-blue-600/20 rounded-lg flex items-center justify-center text-xl">
-                  {platform.icon}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem' }}>
+        {visible.map((p, i) => {
+          const isConnected = !!connected[p.id]
+          return (
+            <div
+              key={p.id}
+              className={`vx-card vx-card-hover animate-fade-up ${isConnected ? 'connected-card' : ''}`}
+              style={{
+                padding: '1.5rem',
+                animationDelay: `${i * 50}ms`,
+                borderColor: isConnected ? 'rgba(61,142,240,0.3)' : undefined,
+                position: 'relative', overflow: 'hidden',
+              }}
+            >
+              {isConnected && (
+                <div style={{
+                  position: 'absolute', top: 0, right: 0,
+                  width: 80, height: 80,
+                  background: 'radial-gradient(circle at top right, rgba(61,142,240,0.1), transparent 70%)',
+                  pointerEvents: 'none',
+                }} />
+              )}
+
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <div style={{
+                    width: 42, height: 42, borderRadius: 10,
+                    background: isConnected ? 'rgba(61,142,240,0.1)' : 'var(--surface-overlay)',
+                    border: `1px solid ${isConnected ? 'rgba(61,142,240,0.25)' : 'var(--surface-border)'}`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '1.25rem',
+                  }}>{p.emoji}</div>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-primary)' }}>{p.name}</div>
+                    <span className="vx-badge vx-badge-muted" style={{ fontSize: '0.68rem', marginTop: 3 }}>{p.category}</span>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-white">{platform.name}</h3>
-                  <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium ${
-                    integrations[platform.id]
-                      ? 'bg-green-900/20 text-green-400'
-                      : 'bg-gray-900/20 text-gray-400'
-                  }`}>
-                    {integrations[platform.id] ? (
-                      <>
-                        <CheckCircle className="w-3 h-3" />
-                        Connected
-                      </>
-                    ) : (
-                      <>
-                        <XCircle className="w-3 h-3" />
-                        Disconnected
-                      </>
-                    )}
-                  </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  {isConnected
+                    ? <CheckCircle size={16} color="#34d399" />
+                    : <XCircle size={16} color="var(--text-muted)" />
+                  }
                 </div>
               </div>
-              <button
-                onClick={() => toggleIntegration(platform.id)}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                  integrations[platform.id]
-                    ? 'bg-red-600 hover:bg-red-700 text-white'
-                    : 'bg-blue-600 hover:bg-blue-700 text-white'
-                }`}
-              >
-                {integrations[platform.id] ? 'Disable' : 'Enable'}
-              </button>
-            </div>
 
-            <p className="text-gray-400 text-sm mb-4">
-              {platform.description}
-            </p>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '0 0 1.25rem', lineHeight: 1.5 }}>{p.desc}</p>
 
-            {integrations[platform.id] && (
-              <div className="space-y-3">
-                <button className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-white text-sm font-medium transition-colors">
-                  <Settings className="w-4 h-4" />
-                  Configure API Keys
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button
+                  onClick={() => toggle(p.id)}
+                  className={isConnected ? 'vx-btn-ghost' : 'vx-btn-primary'}
+                  style={{
+                    flex: 1, justifyContent: 'center', padding: '0.5rem',
+                    fontSize: '0.8rem',
+                    ...(isConnected ? { borderColor: 'rgba(239,68,68,0.25)', color: '#f87171' } : {}),
+                  }}
+                >
+                  {isConnected ? 'Disconnect' : (
+                    <><Zap size={13} /> Connect</>
+                  )}
                 </button>
+                {isConnected && (
+                  <button
+                    className="vx-btn-ghost"
+                    style={{ padding: '0.5rem 0.65rem' }}
+                    title="Configure"
+                    onClick={() => setConfiguring(p.id)}
+                  >
+                    <Settings size={14} />
+                  </button>
+                )}
               </div>
-            )}
-          </div>
-        ))}
+            </div>
+          )
+        })}
       </div>
+
+      {/* Config modal */}
+      {configuring && (
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }}
+          onClick={() => setConfiguring(null)}
+        >
+          <div
+            className="animate-scale-in vx-card"
+            style={{ width: '100%', maxWidth: 440, padding: '2rem', margin: '1rem' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
+              <span style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)' }}>Configure {platforms.find(p => p.id === configuring)?.name}</span>
+              <button className="vx-btn-ghost" style={{ padding: '0.4rem', border: 'none' }} onClick={() => setConfiguring(null)}>✕</button>
+            </div>
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>API Key</label>
+              <input className="vx-input" placeholder="Enter your API key…" type="password" />
+            </div>
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>Store URL</label>
+              <input className="vx-input" placeholder="https://your-store.myshopify.com" />
+            </div>
+            <div style={{ display: 'flex', gap: '0.6rem', justifyContent: 'flex-end' }}>
+              <button className="vx-btn-ghost" onClick={() => setConfiguring(null)}>Cancel</button>
+              <button className="vx-btn-primary" onClick={() => setConfiguring(null)}>Save configuration</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

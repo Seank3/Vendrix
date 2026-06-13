@@ -1,159 +1,145 @@
 import React, { useState, useEffect } from 'react'
-import { Search, Users as UsersIcon } from 'lucide-react'
-import { usersAPI } from '../services/api'
+import { Search, UserPlus, Users as UsersIcon } from 'lucide-react'
 import { getRecentUsers, getUserStats, IS_DEMO } from '../data/demoData'
+import { usersAPI } from '../services/api'
+
+const Skeleton = ({ w = '100%', h = 16, style = {} }) => (
+  <div className="vx-skeleton" style={{ width: w, height: h, ...style }} />
+)
+
+const statusBadge = (status) => {
+  if (status?.toLowerCase() === 'active') return 'vx-badge vx-badge-success'
+  if (status?.toLowerCase() === 'inactive') return 'vx-badge vx-badge-danger'
+  return 'vx-badge vx-badge-muted'
+}
+
+const roleBadge = (role) => {
+  if (role?.toLowerCase() === 'admin') return 'vx-badge vx-badge-danger'
+  if (role?.toLowerCase() === 'manager' || role?.toLowerCase() === 'business account') return 'vx-badge vx-badge-info'
+  return 'vx-badge vx-badge-muted'
+}
+
+const initials = (name) => name ? name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() : 'U'
+
+const avatarColors = ['#3d8ef0', '#34d399', '#c084fc', '#fbbf24', '#f87171']
 
 const Users = () => {
-  const [users, setUsers] = useState([])
+  const [users, setUsers]     = useState([])
+  const [stats, setStats]     = useState(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [searchTerm, setSearchTerm] = useState('')
+  const [search, setSearch]   = useState('')
 
   useEffect(() => {
-    const fetchUsers = async () => {
+    const load = async () => {
       try {
-        setLoading(true)
         const data = await usersAPI.getUsers()
         setUsers(data.results || data || [])
-      } catch (err) {
-        console.error('Error fetching users:', err)
-        // Use demo data as fallback
+      } catch {
         if (IS_DEMO) {
-          console.log('Using demo data for users')
-          setTimeout(() => {
-            setUsers(getRecentUsers().map(user => ({
-              id: user.id,
-              name: user.name,
-              email: user.email,
-              role: user.role,
-              status: user.status
-            })))
-            setLoading(false)
-          }, 500)
-        } else {
-          setError('Failed to load users data')
-          setLoading(false)
+          await new Promise(r => setTimeout(r, 450))
+          setUsers(getRecentUsers())
+          setStats(getUserStats())
         }
+      } finally {
+        setLoading(false)
       }
     }
-
-    fetchUsers()
+    load()
   }, [])
 
-  const filteredUsers = users.filter(user => {
-    const matchesSearch = !searchTerm ||
-      user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.email?.toLowerCase().includes(searchTerm.toLowerCase())
-
-    return matchesSearch
+  const filtered = users.filter(u => {
+    const q = search.toLowerCase()
+    return !q || u.name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q)
   })
-
-  const getStatusColor = (status) => {
-    switch (status?.toLowerCase()) {
-      case 'active': return 'text-green-400 bg-green-900/20'
-      case 'inactive': return 'text-red-400 bg-red-900/20'
-      default: return 'text-gray-400 bg-gray-900/20'
-    }
-  }
-
-  const getRoleColor = (role) => {
-    switch (role?.toLowerCase()) {
-      case 'admin': return 'text-red-400 bg-red-900/20'
-      case 'manager': return 'text-blue-400 bg-blue-900/20'
-      case 'user': return 'text-gray-400 bg-gray-900/20'
-      default: return 'text-gray-400 bg-gray-900/20'
-    }
-  }
-
-  const getInitials = (name) => {
-    return name ? name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) : 'U'
-  }
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-8">
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
-          <h1 className="text-3xl font-bold text-white mb-2">Users</h1>
-          <p className="text-lg text-gray-400">Manage user accounts and permissions</p>
+          <h2 style={{ fontFamily: '"Bricolage Grotesque", system-ui, sans-serif', fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 0.3rem', letterSpacing: '-0.02em' }}>Users</h2>
+          <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', margin: 0 }}>Manage accounts and permissions</p>
         </div>
-
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+        <div style={{ display: 'flex', gap: '0.6rem' }}>
+          <div style={{ position: 'relative' }}>
+            <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
             <input
-              type="text"
-              placeholder="Search users..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="vx-input"
+              placeholder="Search users…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              style={{ paddingLeft: '2.2rem', width: 220 }}
             />
           </div>
-          <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors">
-            <UsersIcon className="w-4 h-4" />
+          <button className="vx-btn-primary">
+            <UserPlus size={15} />
             Add User
           </button>
         </div>
       </div>
 
-      {/* Error Message */}
-      {error && (
-        <div className="mb-8 p-4 bg-red-900/20 border border-red-800 rounded-lg text-red-400">
-          {error}
+      {/* Stats row */}
+      {stats && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.75rem', marginBottom: '1.75rem' }}>
+          {[
+            { label: 'Total Users', value: stats.total, color: '#60a5fa' },
+            { label: 'Active', value: stats.active, color: '#34d399' },
+            { label: 'Inactive', value: stats.inactive, color: '#f87171' },
+            { label: 'New This Month', value: stats.newThisMonth, color: '#fbbf24' },
+          ].map((s, i) => (
+            <div key={i} className="vx-card animate-fade-up" style={{ padding: '1rem 1.25rem', animationDelay: `${i * 50}ms` }}>
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: 6 }}>{s.label}</div>
+              <div style={{ fontFamily: '"Bricolage Grotesque", system-ui, sans-serif', fontSize: '1.45rem', fontWeight: 700, color: s.color }}>{s.value}</div>
+            </div>
+          ))}
         </div>
       )}
 
-      <div className="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
+      <div className="vx-card animate-fade-up" style={{ overflow: 'hidden', animationDelay: '200ms' }}>
+        <div style={{ overflowX: 'auto' }}>
+          <table className="vx-table">
             <thead>
-              <tr className="border-b border-gray-700">
-                <th className="px-4 py-3 text-left font-semibold text-gray-400 text-sm">User</th>
-                <th className="px-4 py-3 text-left font-semibold text-gray-400 text-sm">Email</th>
-                <th className="px-4 py-3 text-left font-semibold text-gray-400 text-sm">Role</th>
-                <th className="px-4 py-3 text-left font-semibold text-gray-400 text-sm">Status</th>
+              <tr>
+                <th>User</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Joined</th>
+                <th>Status</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
+                [1,2,3,4,5].map(i => (
+                  <tr key={i}>
+                    <td><div style={{ display: 'flex', gap: 10, alignItems: 'center' }}><Skeleton w={32} h={32} style={{ borderRadius: '50%', flexShrink: 0 }} /><Skeleton w="60%" h={14} /></div></td>
+                    {[1,2,3,4].map(j => <td key={j}><Skeleton h={14} w="70%" /></td>)}
+                  </tr>
+                ))
+              ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan="4" className="px-4 py-8 text-center text-gray-400">
-                    Loading users...
-                  </td>
-                </tr>
-              ) : filteredUsers.length === 0 ? (
-                <tr>
-                  <td colSpan="4" className="px-4 py-8 text-center text-gray-400">
+                  <td colSpan={5} style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
+                    <UsersIcon size={36} style={{ opacity: 0.3, display: 'block', margin: '0 auto 10px' }} />
                     No users found
                   </td>
                 </tr>
-              ) : (
-                filteredUsers.map((user) => (
-                  <tr key={user.id} className="border-b border-gray-700">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white text-sm font-semibold">
-                          {getInitials(user.name)}
-                        </div>
-                        <div>
-                          <div className="text-white font-medium">{user.name}</div>
-                          <div className="text-gray-400 text-sm">ID: {user.id}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-white">{user.email}</td>
-                    <td className="px-4 py-3">
-                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getRoleColor(user.role)}`}>
-                        {user.role || 'User'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(user.status)}`}>
-                        {user.status || 'Active'}
-                      </span>
-                    </td>
-                  </tr>
-                ))
-              )}
+              ) : filtered.map((user, idx) => (
+                <tr key={user.id}>
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                      <div style={{
+                        width: 34, height: 34, borderRadius: '50%', flexShrink: 0,
+                        background: avatarColors[idx % avatarColors.length],
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '0.75rem', fontWeight: 700, color: '#fff',
+                      }}>{initials(user.name)}</div>
+                      <span style={{ fontWeight: 600 }}>{user.name}</span>
+                    </div>
+                  </td>
+                  <td style={{ color: 'var(--text-secondary)', fontFamily: '"JetBrains Mono", monospace', fontSize: '0.78rem' }}>{user.email}</td>
+                  <td><span className={roleBadge(user.role)}>{user.role || 'User'}</span></td>
+                  <td style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{user.joinDate ? new Date(user.joinDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}</td>
+                  <td><span className={statusBadge(user.status)}>{user.status || 'Active'}</span></td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>

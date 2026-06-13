@@ -1,197 +1,252 @@
-import React, { useState } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { IS_DEMO } from '../data/demoData'
 import {
-  LayoutDashboard,
-  BarChart3,
-  ShoppingCart,
-  Users as UsersIcon,
-  Settings as SettingsIcon,
-  LogOut,
-  Search,
-  Bell,
-  ChevronDown,
-  Menu,
-  Package
+  LayoutDashboard, Package, Warehouse, ShoppingCart, Plug,
+  Building2, BarChart2, Activity, Settings, LogOut,
+  Search, Bell, ChevronDown, Menu, X, Zap, ChevronsLeft
 } from 'lucide-react'
 
-const navigation = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Analytics', href: '/analytics', icon: BarChart3 },
-  { name: 'Orders', href: '/orders', icon: ShoppingCart },
-  { name: 'Users', href: '/users', icon: UsersIcon },
-  { name: 'Integrations', href: '/integrations', icon: SettingsIcon },
-  { name: 'Settings', href: '/settings', icon: SettingsIcon },
+const NAV = [
+  { label: 'Dashboard',     href: '/dashboard',     icon: LayoutDashboard },
+  { label: 'Products',      href: '/products',      icon: Package },
+  { label: 'Inventory',     href: '/inventory',     icon: Warehouse },
+  { label: 'Orders',        href: '/orders',        icon: ShoppingCart },
+  { label: 'Integrations',  href: '/integrations',  icon: Plug },
+  { label: 'Organizations', href: '/organizations', icon: Building2 },
+  { label: 'Analytics',     href: '/analytics',     icon: BarChart2 },
+  { label: 'Events',        href: '/events',        icon: Activity },
 ]
 
-const Sidebar = ({ isCollapsed, setIsCollapsed }) => {
+const Logo = ({ mini }) => (
+  <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+    <div style={{
+      width: 30, height: 30, borderRadius: 7,
+      background: 'var(--indigo)', flexShrink: 0,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+    }}>
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <polyline points="3,4 8,11 13,4" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+        <circle cx="3" cy="4" r="1.7" fill="white"/>
+        <circle cx="13" cy="4" r="1.7" fill="white"/>
+        <circle cx="8" cy="11" r="1.7" fill="white"/>
+      </svg>
+    </div>
+    {!mini && <span style={{ fontWeight: 700, fontSize: 15, letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>Vendrix</span>}
+  </div>
+)
+
+const Sidebar = ({ mini, setMini, mobileOpen, setMobileOpen }) => {
   const location = useLocation()
   const navigate = useNavigate()
 
-  const handleLogout = () => {
-    // In a real app, you would clear authentication state
-    navigate('/login')
-  }
+  const logout = () => { localStorage.removeItem('auth_token'); navigate('/login') }
 
-  return (
-    <div className={`
-      fixed top-0 left-0 h-full bg-gray-800 border-r border-gray-700 flex flex-col transition-all duration-300 z-50
-      ${isCollapsed ? 'w-16' : 'w-64'}
-    `}>
-      {/* Logo */}
-      <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-700">
-        <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-          <Package className="w-5 h-5 text-white" />
-        </div>
-        {!isCollapsed && (
-          <div>
-            <div className="text-lg font-bold text-white">Ecommerce</div>
-            <div className="text-xs text-gray-400">Dashboard</div>
-          </div>
+  const content = (
+    <div style={{
+      height: '100%', display: 'flex', flexDirection: 'column',
+      background: 'var(--bg-surface)',
+      borderRight: '1px solid var(--border)',
+    }}>
+      {/* Logo + collapse */}
+      <div style={{ padding: '0 16px', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+        {!mini && <Logo />}
+        {mini && <div style={{ width: '100%', display: 'flex', justifyContent: 'center' }}><Logo mini /></div>}
+        {!mini && (
+          <button className="vx-btn vx-btn-ghost" style={{ padding: '4px 6px', marginRight: -6 }} onClick={() => setMini(true)} title="Collapse">
+            <ChevronsLeft size={15} />
+          </button>
         )}
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 px-3 py-4">
-        <ul className="space-y-1">
-          {navigation.map((item) => {
-            const isActive = location.pathname === item.href
-            const Icon = item.icon
-
+      {/* Nav */}
+      <nav style={{ flex: 1, padding: '10px 10px', overflowY: 'auto' }}>
+        {!mini && <div className="vx-section-label" style={{ padding: '8px 12px 6px' }}>Navigation</div>}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+          {NAV.map(({ label, href, icon: Icon }) => {
+            const active = location.pathname === href
             return (
-              <li key={item.name}>
-                <Link
-                  to={item.href}
-                  className={`
-                    sidebar-link relative
-                    ${isActive ? 'active' : ''}
-                  `}
-                >
-                  <Icon size={20} />
-                  {!isCollapsed && (
-                    <span className="text-sm font-medium">{item.name}</span>
-                  )}
-                  {isCollapsed && (
-                    <div className="absolute left-full ml-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 shadow-lg">
-                      {item.name}
-                    </div>
-                  )}
-                </Link>
-              </li>
+              <Link
+                key={href}
+                to={href}
+                className={`vx-nav-item ${active ? 'active' : ''}`}
+                title={mini ? label : undefined}
+                style={{ justifyContent: mini ? 'center' : undefined, padding: mini ? '8px' : undefined }}
+                onClick={() => setMobileOpen(false)}
+              >
+                <Icon size={16} strokeWidth={active ? 2.2 : 1.8} />
+                {!mini && label}
+              </Link>
             )
           })}
-        </ul>
+        </div>
+
+        <div style={{ height: 1, background: 'var(--border)', margin: '10px 12px' }} />
+
+        <Link
+          to="/settings"
+          className={`vx-nav-item ${location.pathname === '/settings' ? 'active' : ''}`}
+          title={mini ? 'Settings' : undefined}
+          style={{ justifyContent: mini ? 'center' : undefined, padding: mini ? '8px' : undefined }}
+        >
+          <Settings size={16} strokeWidth={1.8} />
+          {!mini && 'Settings'}
+        </Link>
       </nav>
 
-      {/* User section */}
-      <div className="px-3 py-4 border-t border-gray-700">
-        <button
-          onClick={handleLogout}
-          className="w-full flex items-center gap-3 px-4 py-3 text-red-400 border border-red-800 rounded-lg hover:bg-red-900 hover:text-red-300 transition-colors"
-        >
-          <LogOut size={20} />
-          {!isCollapsed && <span className="text-sm font-medium">Logout</span>}
-        </button>
+      {/* User */}
+      <div style={{ padding: 10, borderTop: '1px solid var(--border)', flexShrink: 0 }}>
+        {mini ? (
+          <button className="vx-btn vx-btn-ghost" style={{ width: '100%', justifyContent: 'center', padding: 8 }} onClick={() => setMini(false)} title="Expand">
+            <Menu size={16} />
+          </button>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '8px 10px', borderRadius: 7, background: 'var(--bg-subtle)', cursor: 'default' }}>
+            <div style={{
+              width: 28, height: 28, borderRadius: 6, flexShrink: 0,
+              background: 'var(--indigo-light)', border: '1px solid var(--indigo-mid)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 11, fontWeight: 700, color: 'var(--indigo)',
+            }}>A</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.2 }}>Admin</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>admin@vendrix.app</div>
+            </div>
+            <button className="vx-btn vx-btn-ghost" style={{ padding: 4, flexShrink: 0 }} onClick={logout} title="Sign out">
+              <LogOut size={14} />
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )
-}
-
-const TopNav = ({ isCollapsed, setIsCollapsed }) => {
-  const [userMenuOpen, setUserMenuOpen] = useState(false)
-
-  const getPageTitle = () => {
-    const path = location.pathname
-    const titles = {
-      '/dashboard': 'Dashboard',
-      '/analytics': 'Analytics',
-      '/orders': 'Orders',
-      '/users': 'Users',
-      '/integrations': 'Integrations',
-      '/settings': 'Settings'
-    }
-    return titles[path] || 'Dashboard'
-  }
 
   return (
-    <div className={`
-      fixed top-0 h-16 bg-gray-800 border-b border-gray-700 transition-all duration-300 z-40
-      ${isCollapsed ? 'left-16' : 'left-64'} right-0
-    `}>
-      <div className="flex items-center justify-between h-full px-6">
-        {/* Left section */}
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => setIsCollapsed(!isCollapsed)}
-            className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-gray-700 transition-colors"
-          >
-            <Menu size={20} />
-          </button>
+    <>
+      {/* Desktop */}
+      <div style={{
+        position: 'fixed', top: 0, left: 0, bottom: 0,
+        width: mini ? 56 : 220,
+        transition: 'width 0.2s ease',
+        zIndex: 50,
+        display: 'none',
+      }} id="vx-sidebar-desktop">
+        {content}
+      </div>
+      <style>{`@media(min-width:768px){#vx-sidebar-desktop{display:block !important;}}`}</style>
 
-          <div>
-            <h1 className="text-xl font-semibold text-white">{getPageTitle()}</h1>
-            <p className="text-sm text-gray-400">Welcome back, Admin</p>
+      {/* Mobile overlay */}
+      {mobileOpen && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', zIndex: 60 }} onClick={() => setMobileOpen(false)} />
+      )}
+      <div style={{
+        position: 'fixed', top: 0, left: mobileOpen ? 0 : -240, bottom: 0,
+        width: 220, transition: 'left 0.22s ease', zIndex: 70,
+      }}>
+        {content}
+      </div>
+    </>
+  )
+}
+
+const Topbar = ({ mini, setMobileOpen }) => {
+  const location = useLocation()
+  const navigate = useNavigate()
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [userOpen, setUserOpen] = useState(false)
+  const userRef = useRef(null)
+
+  useEffect(() => {
+    const fn = (e) => { if (userRef.current && !userRef.current.contains(e.target)) setUserOpen(false) }
+    document.addEventListener('mousedown', fn)
+    return () => document.removeEventListener('mousedown', fn)
+  }, [])
+
+  const pageTitle = {
+    '/dashboard': 'Dashboard', '/products': 'Products', '/inventory': 'Inventory',
+    '/orders': 'Orders', '/integrations': 'Integrations', '/organizations': 'Organizations',
+    '/analytics': 'Analytics', '/events': 'Events', '/settings': 'Settings',
+  }[location.pathname] || 'Vendrix'
+
+  const logout = () => { localStorage.removeItem('auth_token'); navigate('/login') }
+
+  return (
+    <div style={{
+      position: 'fixed', top: 0, right: 0, height: 56,
+      background: 'var(--bg-surface)',
+      borderBottom: '1px solid var(--border)',
+      display: 'flex', alignItems: 'center',
+      padding: '0 20px', gap: 12, zIndex: 40,
+      left: 0, transition: 'left 0.2s ease',
+    }} id="vx-topbar">
+      <style>{`@media(min-width:768px){#vx-topbar{left:${mini ? 56 : 220}px !important;}}`}</style>
+
+      {/* Mobile menu btn */}
+      <button className="vx-btn vx-btn-ghost" style={{ padding: 6, display: 'flex' }} onClick={() => setMobileOpen(v => !v)} id="vx-mobile-menu">
+        <Menu size={18} />
+      </button>
+      <style>{`@media(min-width:768px){#vx-mobile-menu{display:none !important;}}`}</style>
+
+      <h1 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', flex: 1 }}>{pageTitle}</h1>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        {/* Search */}
+        {searchOpen ? (
+          <div style={{ position: 'relative' }}>
+            <Search size={13} style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+            <input autoFocus className="vx-input" style={{ paddingLeft: 28, width: 240, height: 32, fontSize: 13 }} placeholder="Search products, orders…" onBlur={() => setSearchOpen(false)} />
           </div>
-        </div>
+        ) : (
+          <button className="vx-btn vx-btn-secondary" style={{ height: 32, gap: 6, padding: '0 10px', fontSize: 13, color: 'var(--text-muted)' }} onClick={() => setSearchOpen(true)}>
+            <Search size={13} /> Search
+          </button>
+        )}
 
-        {/* Right section */}
-        <div className="flex items-center gap-4">
-          {/* Demo Mode Badge */}
-          {IS_DEMO && (
-            <div className="px-3 py-1 bg-yellow-600/20 border border-yellow-600/30 rounded-full text-xs font-medium text-yellow-400">
-              Demo Mode
+        {/* Org switcher */}
+        <button className="vx-btn vx-btn-secondary" style={{ height: 32, padding: '0 10px', gap: 5, fontSize: 12.5 }} id="vx-orgsw">
+          <Building2 size={13} />
+          <span style={{ maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Heras Technology</span>
+          <ChevronDown size={11} />
+        </button>
+        <style>{`@media(max-width:640px){#vx-orgsw{display:none !important;}}`}</style>
+
+        {/* Notifications */}
+        <button className="vx-btn vx-btn-secondary" style={{ height: 32, width: 32, padding: 0, position: 'relative', justifyContent: 'center' }}>
+          <Bell size={14} />
+          <span style={{ position: 'absolute', top: 6, right: 6, width: 6, height: 6, background: 'var(--red)', borderRadius: '50%', border: '1.5px solid white' }} />
+        </button>
+
+        {/* User menu */}
+        <div style={{ position: 'relative' }} ref={userRef}>
+          <button
+            className="vx-btn vx-btn-secondary"
+            style={{ height: 32, padding: '0 8px', gap: 7 }}
+            onClick={() => setUserOpen(v => !v)}
+          >
+            <div style={{ width: 22, height: 22, borderRadius: 5, background: 'var(--indigo)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: 'white', flexShrink: 0 }}>A</div>
+            <ChevronDown size={11} style={{ color: 'var(--text-muted)', transform: userOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
+          </button>
+          {userOpen && (
+            <div style={{
+              position: 'absolute', top: 'calc(100% + 6px)', right: 0, width: 192,
+              background: 'var(--bg-surface)', border: '1px solid var(--border)',
+              borderRadius: 8, boxShadow: 'var(--shadow-lg)', zIndex: 200, overflow: 'hidden',
+            }}>
+              <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)' }}>
+                <div style={{ fontSize: 12.5, fontWeight: 600 }}>Admin User</div>
+                <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>admin@vendrix.app</div>
+              </div>
+              <Link to="/settings" onClick={() => setUserOpen(false)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 14px', fontSize: 13, color: 'var(--text-secondary)', transition: 'background 0.1s' }}
+                onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-subtle)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                <Settings size={13} /> Settings
+              </Link>
+              <button onClick={logout} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '9px 14px', fontSize: 13, color: 'var(--red)', background: 'transparent', border: 'none', cursor: 'pointer', transition: 'background 0.1s', fontFamily: 'inherit' }}
+                onMouseEnter={e => e.currentTarget.style.background = 'var(--red-bg)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                <LogOut size={13} /> Sign out
+              </button>
             </div>
           )}
-
-          {/* Search */}
-          <div className="relative w-64">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search..."
-              className="w-full pl-10 pr-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          {/* Notifications */}
-          <button className="relative p-2 text-gray-400 hover:text-white rounded-lg hover:bg-gray-700 transition-colors">
-            <Bell size={20} />
-            <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
-          </button>
-
-          {/* User Menu */}
-          <div className="relative">
-            <button
-              onClick={() => setUserMenuOpen(!userMenuOpen)}
-              className="flex items-center gap-2 p-2 rounded-lg text-white hover:bg-gray-700 transition-colors"
-            >
-              <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-sm font-semibold">
-                A
-              </div>
-              <ChevronDown size={16} className={`transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} />
-            </button>
-
-            {userMenuOpen && (
-              <div className="absolute right-0 top-full mt-2 w-48 bg-gray-800 border border-gray-700 rounded-lg shadow-lg py-1 z-50">
-                <div className="px-4 py-2 border-b border-gray-700">
-                  <div className="text-sm font-medium text-white">Admin User</div>
-                  <div className="text-xs text-gray-400">admin@example.com</div>
-                </div>
-                <Link to="/settings" className="block px-4 py-2 text-sm text-white hover:bg-gray-700" onClick={() => setUserMenuOpen(false)}>
-                  Profile Settings
-                </Link>
-                <button
-                  onClick={() => {
-                    // Handle logout
-                    setUserMenuOpen(false)
-                  }}
-                  className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-red-900"
-                >
-                  Logout
-                </button>
-              </div>
-            )}
-          </div>
         </div>
       </div>
     </div>
@@ -199,18 +254,16 @@ const TopNav = ({ isCollapsed, setIsCollapsed }) => {
 }
 
 const DashboardLayout = ({ children }) => {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [mini, setMini] = useState(false)
+  const [mobileOpen, setMobileOpen] = useState(false)
 
   return (
-    <div className="min-h-screen bg-gray-900">
-      <Sidebar isCollapsed={sidebarCollapsed} setIsCollapsed={setSidebarCollapsed} />
-      <TopNav isCollapsed={sidebarCollapsed} setIsCollapsed={setSidebarCollapsed} />
-
-      <main className={`
-        transition-all duration-300 pt-16
-        ${sidebarCollapsed ? 'ml-16' : 'ml-64'}
-      `}>
-        <div className="p-6">
+    <div style={{ minHeight: '100vh', background: 'var(--bg-base)' }}>
+      <Sidebar mini={mini} setMini={setMini} mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
+      <Topbar mini={mini} setMobileOpen={setMobileOpen} />
+      <main style={{ paddingTop: 56, paddingLeft: 0, transition: 'padding-left 0.2s ease' }} id="vx-main">
+        <style>{`@media(min-width:768px){#vx-main{padding-left:${mini ? 56 : 220}px !important;}}`}</style>
+        <div style={{ maxWidth: 1400, margin: '0 auto', padding: '28px 28px' }}>
           {children}
         </div>
       </main>
