@@ -7,9 +7,8 @@
 # Notes:
 #  • Free-tier Postgres on Render is DELETED after 30 days — upgrade
 #    the `vendrix-db` plan (basic-256mb) or swap to Supabase for prod.
-#  • Set CREDENTIALS_ENCRYPTION_KEY manually on vendrix-api (see
-#    DEPLOYMENT.md) — a random string will not be a valid Fernet key.
-#  • Set CORS_ALLOWED_ORIGINS manually to your frontend URL(s).
+#  • CREDENTIALS_ENCRYPTION_KEY + CORS_ALLOWED_ORIGINS are sync:false —
+#    Render PROMPTS for them at Blueprint creation time (Fernet key!).
 #  • To use Supabase instead of Render Postgres: delete the `databases`
 #    block and set DATABASE_URL on both services yourself.
 # ─────────────────────────────────────────────────────────────────
@@ -32,19 +31,18 @@ services:
       - key: SECRET_KEY
         generateValue: true
       - key: CREDENTIALS_ENCRYPTION_KEY
-        sync: false                # set manually — must be a Fernet key
+        sync: false                # prompted at creation — must be a Fernet key
       - key: ALLOWED_HOSTS
         value: ".onrender.com"
       - key: CORS_ALLOWED_ORIGINS
-        sync: false                # e.g. https://vendrix-console.netlify.app
+        sync: false                # prompted at creation — e.g. https://vendrix-console.netlify.app
       - key: DATABASE_URL
-        fromService:
-          type: pgsql
+        fromDatabase:              # Render Postgres uses fromDatabase (not fromService)
           name: vendrix-db
           property: connectionString
       - key: REDIS_URL
         fromService:
-          type: redis
+          type: keyvalue
           name: vendrix-redis
           property: connectionString
 
@@ -55,7 +53,7 @@ services:
     plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: celery -A vendrix worker --loglevel=info --concurrency=2
-    autoDeploy: true
+    autoDeployTrigger: commit
     envVars:
       - key: DJANGO_SETTINGS_MODULE
         value: vendrix.settings.production
@@ -72,18 +70,17 @@ services:
       - key: ALLOWED_HOSTS
         value: ".onrender.com"
       - key: DATABASE_URL
-        fromService:
-          type: pgsql
+        fromDatabase:              # Render Postgres uses fromDatabase (not fromService)
           name: vendrix-db
           property: connectionString
       - key: REDIS_URL
         fromService:
-          type: redis
+          type: keyvalue
           name: vendrix-redis
           property: connectionString
 
   # ── Redis (Celery broker + Django cache) ─────────────────────
-  - type: redis
+  - type: keyvalue
     name: vendrix-redis
     plan: free                     # 25 MB — fine for a queue; upgrade for prod
     ipAllowList: []                # private network only
