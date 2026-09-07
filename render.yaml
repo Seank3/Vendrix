@@ -25,7 +25,7 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: python manage.py migrate --noinput && python manage.py collectstatic --noinput && gunicorn vendrix.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120
     healthCheckPath: /health/
-    autoDeploy: true
+    autoDeployTrigger: commit
     envVars:
       - key: DJANGO_SETTINGS_MODULE
         value: vendrix.settings.production
@@ -64,13 +64,11 @@ services:
           type: web
           name: vendrix-api
           envVarKey: SECRET_KEY
-        sync: false
       - key: CREDENTIALS_ENCRYPTION_KEY
         fromService:
           type: web
           name: vendrix-api
           envVarKey: CREDENTIALS_ENCRYPTION_KEY
-        sync: false
       - key: ALLOWED_HOSTS
         value: ".onrender.com"
       - key: DATABASE_URL
