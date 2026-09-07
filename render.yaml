@@ -20,8 +20,10 @@ services:
     name: vendrix-api
     runtime: python
     plan: free                     # spins down after 15 min idle (fine for dev/demo)
-    buildCommand: pip install -r requirements.txt && python manage.py collectstatic --noinput
-    startCommand: python manage.py migrate --noinput && gunicorn vendrix.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120
+    # NOTE: collectstatic runs at START (not build): the first build has no runtime
+    # secrets yet (production settings require CREDENTIALS_ENCRYPTION_KEY).
+    buildCommand: pip install -r requirements.txt
+    startCommand: python manage.py migrate --noinput && python manage.py collectstatic --noinput && gunicorn vendrix.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120
     healthCheckPath: /health/
     autoDeploy: true
     envVars:
