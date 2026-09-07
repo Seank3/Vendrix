@@ -1,13 +1,26 @@
 # Netlify config — Vendrix Console (React + Vite SPA)
 # Import this repo in Netlify; the build section tells Netlify to treat
-# `frontend/` as the project root. Set the env var below in Netlify UI:
+# `frontend/` as the project root.
+#
+# The /api/* proxy below sends API calls to the Render-hosted Django API
+# SERVER-SIDE, so the browser only ever talks to this same origin:
+#   • no CORS config needed on Render
+#   • no VITE_API_BASE_URL env var needed (the app falls back to '/api/v1')
+# If you'd rather call the API directly (and set CORS on Render), delete
+# the /api proxy and set this env var in Netlify UI instead:
 #   VITE_API_BASE_URL=https://vendrix-api.onrender.com/api/v1
-# (See DEPLOYMENT.md — the SPA redirect proxy alternative needs no env var.)
 
 [build]
   base    = "frontend"
   command = "npm run build"
   publish = "dist"
+
+# API proxy → Render (must be listed BEFORE the SPA fallback; first match wins)
+[[redirects]]
+  from = "/api/*"
+  to = "https://vendrix-api.onrender.com/api/:splat"
+  status = 200
+  force = true
 
 # SPA fallback for React Router (kept in sync with frontend/_redirects)
 [[redirects]]

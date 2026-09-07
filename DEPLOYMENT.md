@@ -52,21 +52,14 @@ This guide covers the recommended hosting split for Vendrix, plus the alternativ
 
 1. In Netlify: **Add new site → Import an existing project → GitHub**.
 2. Build settings are already in `netlify.toml` (base `frontend/`, `npm run build`, publish `dist`).
-3. Add environment variable in Netlify UI (Site → Settings → Environment):
-   ```
-   VITE_API_BASE_URL = https://vendrix-api.onrender.com/api/v1
-   ```
-   *(The SPA fallback rewrite is already configured.)*
-4. Deploy. The SPA talks to the API cross-origin using your JWT/API keys — CORS was allowed in step A.2.
+3. Deploy. `netlify.toml` proxies `/api/*` to the Render API server-side (200-rewrite), so:
+   - **no `VITE_API_BASE_URL` env var needed** — leave it unset (the app falls back to `/api/v1`)
+   - **no CORS config needed** — the browser only ever talks to the Netlify origin
 
-> **No-env alternative:** Netlify can *proxy* `/api/*` to Render via a 200-rewrite, which avoids CORS entirely:
-> ```toml
-> [[redirects]]
->   from = "/api/*"
->   to = "https://vendrix-api.onrender.com/api/:splat"
->   status = 200
-> ```
-> (then leave `VITE_API_BASE_URL` unset). The CORS approach above is the more standard one.
+> **Alternative (direct API calls):** delete the `/api/*` proxy from `netlify.toml`, set
+> `VITE_API_BASE_URL=https://vendrix-api.onrender.com/api/v1` in Netlify UI
+> (Site → Settings → Environment variables) and rebuild, and set the same frontend
+> origin in Render's `CORS_ALLOWED_ORIGINS`. The proxy is the simpler default.
 
 ---
 
