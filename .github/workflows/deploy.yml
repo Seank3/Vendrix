@@ -1,33 +1,38 @@
 name: Deploy
 
-# Deploys on push to main — but only runs the jobs whose secrets exist.
+# Deploys on push to main — but only runs deploy steps whose secrets exist.
+# NOTE: the `secrets` context is NOT allowed in job-level `if:` conditions
+# (that makes the file invalid), so each deploy job gates with a step that
+# copies secrets into env and writes a `go` output — the documented pattern.
+#
 #  1. Netlify   → needs NETLIFY_AUTH_TOKEN + NETLIFY_SITE_ID
 #  2. Render    → needs RENDER_DEPLOY_HOOK_URL (optional — Render Blueprint
-#                 auto-deploys when the repo is connected, so this is a backup
-#                 path for manual/skip-build services)
+#                 auto-deploys when the repo is connected, so this is a backup)
 #
 # Add secrets in GitHub → Settings → Secrets and variables → Actions.
+# See DEPLOYMENT.md for where to get each value.
 
 on:
   push:
     branches: [main]
 
 jobs:
-  # GitHub reports a workflow run as FAILED when every job is skipped by `if:`.
-  # This always-running job keeps the run green until deploy secrets exist,
-  # and reports which deploy targets are active.
+  # Always runs — keeps the run green and reports which deploy targets are live.
   status:
     name: Deploy readiness
     runs-on: ubuntu-latest
     steps:
       - name: Show configured deploy targets
+        env:
+          NETLIFY_AUTH: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE: ${{ secrets.NETLIFY_SITE_ID }}
+          RENDER_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
         run: |
-          echo "Netlify: ${{ secrets.NETLIFY_AUTH_TOKEN != '' && secrets.NETLIFY_SITE_ID != '' && 'configured — will deploy' || 'not configured (skipped — see DEPLOYMENT.md)' }}"
-          echo "Render:  ${{ secrets.RENDER_DEPLOY_HOOK_URL != '' && 'configured — deploy hook armed' || 'not configured (Render Blueprint auto-deploys on push anyway)' }}"
+          echo "Netlify: $([ -n "$NETLIFY_AUTH" ] && [ -n "$NETLIFY_SITE" ] && echo 'configured — will deploy' || echo 'not configured (SKIPPED — see DEPLOYMENT.md)')"
+          echo "Render:  $([ -n "$RENDER_HOOK" ] && echo 'configured — deploy hook armed' || echo 'not configured (not needed — Render Blueprint auto-deploys on push)')"
 
   netlify:
     name: Deploy console → Netlify
-    if: ${{ secrets.NETLIFY_AUTH_TOKEN != '' && secrets.NETLIFY_SITE_ID != '' }}
     runs-on: ubuntu-latest
     environment: production
     defaults:
@@ -42,12 +47,27 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
+      - name: Gate on Netlify secrets
+        id: gate
+        env:
+          SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+          AUTH: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+        run: |
+          if [ -n "$SITE_ID" ] && [ -n "$AUTH" ]; then
+            echo "go=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "go=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Netlify secrets not configured — deploy skipped (see DEPLOYMENT.md)."
+          fi
+
       - name: Install deps & build
+        if: steps.gate.outputs.go == 'true'
         run: npm ci && npm run build
         env:
           VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL || 'https://vendrix-api.onrender.com/api/v1' }}
 
       - name: Deploy to Netlify
+        if: steps.gate.outputs.go == 'true'
         run: npx netlify-cli deploy --prod --dir dist --site "$NETLIFY_SITE_ID" --auth "$NETLIFY_AUTH_TOKEN"
         env:
           NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
@@ -55,9 +75,23 @@ jobs:
 
   render:
     name: Trigger Render deploy (API + worker)
-    if: ${{ secrets.RENDER_DEPLOY_HOOK_URL != '' }}
     runs-on: ubuntu-latest
     environment: production
     steps:
+      - name: Gate on Render hook
+        id: gate
+        env:
+          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -n "$HOOK" ]; then
+            echo "go=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "go=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::RENDER_DEPLOY_HOOK_URL not configured — skipped (not needed: Render Blueprint auto-deploys on push)."
+          fi
+
       - name: Hit Render deploy hook
-        run: curl -fsS -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+        if: steps.gate.outputs.go == 'true'
+        env:
+          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: curl -fsS -X POST "$HOOK"
