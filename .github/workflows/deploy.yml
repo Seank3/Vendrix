@@ -13,6 +13,18 @@ on:
     branches: [main]
 
 jobs:
+  # GitHub reports a workflow run as FAILED when every job is skipped by `if:`.
+  # This always-running job keeps the run green until deploy secrets exist,
+  # and reports which deploy targets are active.
+  status:
+    name: Deploy readiness
+    runs-on: ubuntu-latest
+    steps:
+      - name: Show configured deploy targets
+        run: |
+          echo "Netlify: ${{ secrets.NETLIFY_AUTH_TOKEN != '' && secrets.NETLIFY_SITE_ID != '' && 'configured — will deploy' || 'not configured (skipped — see DEPLOYMENT.md)' }}"
+          echo "Render:  ${{ secrets.RENDER_DEPLOY_HOOK_URL != '' && 'configured — deploy hook armed' || 'not configured (Render Blueprint auto-deploys on push anyway)' }}"
+
   netlify:
     name: Deploy console → Netlify
     if: ${{ secrets.NETLIFY_AUTH_TOKEN != '' && secrets.NETLIFY_SITE_ID != '' }}
