@@ -1,47 +1,28 @@
 import React from 'react'
-import { create } from 'zustand'
 import { X, CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react'
+import { useToastStore } from '../store/toast'
 
-export const useToastStore = create((set, get) => ({
-  toasts: [],
-  addToast: (toast) => {
-    const id = Date.now() + Math.random()
-    const t = { id, type: 'info', message: '', duration: 4500, ...toast }
-    set(s => ({ toasts: [...s.toasts, t] }))
-    setTimeout(() => get().removeToast(id), t.duration)
-  },
-  removeToast: (id) => set(s => ({ toasts: s.toasts.filter(t => t.id !== id) })),
-  success: (message, opts = {}) => get().addToast({ type: 'success', message, ...opts }),
-  error:   (message, opts = {}) => get().addToast({ type: 'error',   message, ...opts }),
-  warning: (message, opts = {}) => get().addToast({ type: 'warning', message, ...opts }),
-  info:    (message, opts = {}) => get().addToast({ type: 'info',    message, ...opts }),
-}))
+export { useToastStore }
 
-const TOAST_STYLES = {
-  success: { bg: 'var(--green-bg)',  border: 'var(--green-border)',  color: 'var(--green)',  Icon: CheckCircle },
-  error:   { bg: 'var(--red-bg)',    border: 'var(--red-border)',    color: 'var(--red)',    Icon: AlertCircle },
-  warning: { bg: 'var(--amber-bg)',  border: 'var(--amber-border)',  color: 'var(--amber)',  Icon: AlertTriangle },
-  info:    { bg: 'var(--blue-bg)',   border: 'var(--blue-border)',   color: 'var(--blue)',   Icon: Info },
+const TOAST_META = {
+  success: { Icon: CheckCircle, tone: 'success' },
+  error:   { Icon: AlertCircle, tone: 'error' },
+  warning: { Icon: AlertTriangle, tone: 'warning' },
+  info:    { Icon: Info, tone: 'info' },
 }
 
 const Toast = ({ toast }) => {
   const { removeToast } = useToastStore()
-  const { bg, border, color, Icon } = TOAST_STYLES[toast.type] || TOAST_STYLES.info
+  const { Icon, tone } = TOAST_META[toast.type] || TOAST_META.info
   return (
-    <div style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      padding: '12px 14px', borderRadius: 8, minWidth: 280, maxWidth: 380,
-      background: bg, border: `1px solid ${border}`,
-      boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
-      animation: 'vx-fadein 0.2s ease',
-      fontFamily: 'var(--font-ui)',
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <Icon size={16} color={color} />
-        <span style={{ fontSize: 13.5, color: 'var(--text-primary)' }}>{toast.message}</span>
+    <div className={`vx-toast ${tone}`} role="status">
+      <Icon size={17} className="icon" />
+      <div style={{ minWidth: 0 }}>
+        <div className="t-title">{toast.title || (toast.type === 'success' ? 'Success' : toast.type === 'error' ? 'Error' : toast.type === 'warning' ? 'Warning' : 'Note')}</div>
+        <div className="t-msg">{toast.message}</div>
       </div>
-      <button onClick={() => removeToast(toast.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 3, marginLeft: 10 }}>
-        <X size={14} />
+      <button className="close vx-icon-btn sm" onClick={() => removeToast(toast.id)} aria-label="Dismiss">
+        <X size={13} />
       </button>
     </div>
   )
@@ -50,8 +31,8 @@ const Toast = ({ toast }) => {
 const ToastContainer = () => {
   const { toasts } = useToastStore()
   return (
-    <div style={{ position: 'fixed', bottom: 20, right: 20, zIndex: 9999, display: 'flex', flexDirection: 'column', gap: 8 }}>
-      {toasts.map(t => <Toast key={t.id} toast={t} />)}
+    <div className="vx-toasts">
+      {toasts.map((t) => <Toast key={t.id} toast={t} />)}
     </div>
   )
 }

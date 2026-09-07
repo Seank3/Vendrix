@@ -1,116 +1,166 @@
-import React, { useState, useEffect } from 'react'
-import { Search, Filter, Plus, RefreshCw, MoreHorizontal } from 'lucide-react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { Package, Plus, Search, Pencil, RefreshCw } from 'lucide-react'
+import { productsAPI, inventoryAPI } from '../services/api'
+import { useToastStore } from '../store/toast'
+import { PageHeader, Badge, Modal, Field, EmptyState, LoadingRows, statusTone, fetchError, timeAgo } from '../components/ui'
 
-const DEMO_PRODUCTS = [
-  { sku: 'SKU-0041', name: 'Organic Shea Butter 500ml', inventory: 842, channels: ['Shopify', 'Jumia'], status: 'active', last_sync: '3 min ago', price: '$12.50' },
-  { sku: 'SKU-0042', name: 'Aloe Vera Gel 250ml', inventory: 326, channels: ['Shopify'], status: 'active', last_sync: '3 min ago', price: '$8.00' },
-  { sku: 'SKU-0043', name: 'Coconut Hair Oil 200ml', inventory: 17, channels: ['Jumia', 'WhatsApp'], status: 'low_stock', last_sync: '15 min ago', price: '$9.75' },
-  { sku: 'SKU-0044', name: 'African Black Soap Bar', inventory: 0, channels: ['Shopify', 'Jumia', 'WhatsApp'], status: 'out_of_stock', last_sync: '1 hr ago', price: '$4.50' },
-  { sku: 'SKU-0045', name: 'Baobab Face Serum 30ml', inventory: 204, channels: ['Shopify'], status: 'active', last_sync: '3 min ago', price: '$24.00' },
-  { sku: 'SKU-0046', name: 'Moringa Powder 1kg', inventory: 558, channels: ['Jumia'], status: 'active', last_sync: '8 min ago', price: '$18.00' },
-  { sku: 'SKU-0047', name: 'Hibiscus Tea Blend 100g', inventory: 89, channels: ['WhatsApp', 'Shopify'], status: 'active', last_sync: '3 min ago', price: '$6.00' },
-  { sku: 'SKU-0048', name: 'Argan Conditioning Oil', inventory: 3, channels: ['Shopify'], status: 'low_stock', last_sync: '45 min ago', price: '$16.50' },
-]
-
-const statusBadge = (s) => {
-  if (s === 'active')       return <span className="vx-badge vx-badge-green">Active</span>
-  if (s === 'low_stock')    return <span className="vx-badge vx-badge-amber">Low stock</span>
-  if (s === 'out_of_stock') return <span className="vx-badge vx-badge-red">Out of stock</span>
-  return <span className="vx-badge vx-badge-gray">{s}</span>
-}
-
-const channelTag = (name) => {
-  const colors = { Shopify: '#96BF48', Jumia: '#F46A00', WhatsApp: '#25D366', 'Odoo ERP': '#714B67' }
-  return (
-    <span key={name} style={{
-      display: 'inline-block', padding: '1px 6px', borderRadius: 3,
-      fontSize: 11, fontWeight: 500, background: `${colors[name]}18`,
-      color: colors[name] || 'var(--text-secondary)', border: `1px solid ${colors[name]}30`,
-    }}>{name}</span>
-  )
-}
+const emptyForm = { sku: '', name: '', description: '', category: '', status: 'draft' }
 
 export default function Products() {
+  const [products, setProducts] = useState(null)
+  const [levels, setLevels] = useState({})
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('all')
+  const [busy, setBusy] = useState(false)
+  const [createOpen, setCreateOpen] = useState(false)
+  const [editTarget, setEditTarget] = useState(null)
+  const [form, setForm] = useState(emptyForm)
+  const [formErr, setFormErr] = useState('')
+  const toast = useToastStore()
+  const [params] = useSearchParams()
 
-  const filtered = DEMO_PRODUCTS.filter(p => {
-    const q = search.toLowerCase()
-    const matchQ = !q || p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q)
-    const matchF = filter === 'all' || p.status === filter
-    return matchQ && matchF
-  })
+  const load = useCallback(async (keep = false) => {
+    if (!keep) setProducts(null)
+    try {
+      const [ps, ls] = await Promise.all([productsAPI.list(), inventoryAPI.list()])
+      setLevels(Object.fromEntries((ls || []).map((l) => [l.sku, l])))
+      setProducts(ps || [])
+    } catch (e) {
+      toast.error(fetchError(e, 'Could not load products.'))
+      setProducts([])
+    }
+  }, [])
+
+  useEffect(() => {
+    load(true)
+    const q = params.get('q')
+    if (q) setSearch(q)
+  }, [params])
+
+  const filtered = useMemo(() => {
+    let list = products || []
+    const q = search.trim().toLowerCase()
+    if (q) list = list.filter((p) => p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q))
+    if (filter !== 'all') list = list.filter((p) => (filter === 'in_stock' ? (levels[p.sku]?.quantity_available || 0) > 0 : filter === 'low' ? (levels[p.sku]?.quantity_available || 0) > 0 && (levels[p.sku]?.quantity_available || 0) <= 5 : (levels[p.sku]?.quantity_available || 0) <= 0))
+    return list
+  }, [products, search, filter, levels])
+
+  const openCreate = () => { setForm(emptyForm); setFormErr(''); setCreateOpen(true) }
+  const openEdit = (p) => {
+    setForm({ sku: p.sku, name: p.name, description: p.description || '', category: p.category || '', status: p.status })
+    setFormErr(''); setEditTarget(p)
+  }
+
+  const save = async (e) => {
+    e.preventDefault()
+    setBusy(true); setFormErr('')
+    try {
+      if (editTarget) {
+        await productsAPI.update(editTarget.id, { name: form.name, description: form.description, category: form.category, status: form.status })
+        toast.success(`Product ${form.sku} updated.`)
+      } else {
+        await productsAPI.create({ ...form, attributes: {} })
+        toast.success(`Product ${form.sku} created.`)
+      }
+      setCreateOpen(false); setEditTarget(null)
+      await load()
+    } catch (err) {
+      setFormErr(fetchError(err))
+    } finally { setBusy(false) }
+  }
+
+  const statusBadge = (s) => ({ active: 'green', draft: 'gray', archived: 'gray' }[s] || 'gray')
 
   return (
     <div className="vx-page">
-      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
-        <div>
-          <h1 style={{ fontSize: 18, fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 3 }}>Products</h1>
-          <p style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>{DEMO_PRODUCTS.length} products synced across all channels</p>
-        </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button className="vx-btn vx-btn-secondary"><RefreshCw size={13} /> Sync now</button>
-          <button className="vx-btn vx-btn-primary"><Plus size={13} /> Add product</button>
-        </div>
-      </div>
+      <PageHeader
+        title="Products"
+        sub={products ? `${filtered.length} of ${products.length} products · master catalog` : 'Master catalog'}
+        crumbs={['Products']}
+        actions={
+          <>
+            <button className="vx-btn vx-btn-secondary" onClick={() => load()}><RefreshCw size={13} /> Refresh</button>
+            <button className="vx-btn vx-btn-primary" onClick={openCreate}><Plus size={14} /> New product</button>
+          </>
+        }
+      />
 
-      {/* Filters */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
-        <div style={{ position: 'relative', flex: '1 1 220px', maxWidth: 300 }}>
-          <Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
-          <input className="vx-input" style={{ paddingLeft: 30, height: 34 }} placeholder="Search by name or SKU…" value={search} onChange={e => setSearch(e.target.value)} />
+      <div className="vx-toolbar">
+        <div className="vx-searchbox">
+          <Search size={13} />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by name or SKU…" style={{ width: 280 }} />
         </div>
-        <select className="vx-select" style={{ height: 34, fontSize: 13 }} value={filter} onChange={e => setFilter(e.target.value)}>
-          <option value="all">All statuses</option>
-          <option value="active">Active</option>
-          <option value="low_stock">Low stock</option>
-          <option value="out_of_stock">Out of stock</option>
-        </select>
-        <button className="vx-btn vx-btn-secondary" style={{ height: 34 }}><Filter size={13} /> Filter</button>
+        {[['all', 'All'], ['active', 'Active'], ['draft', 'Draft'], ['in_stock', 'In stock'], ['low', 'Low stock'], ['out', 'Out of stock']].map(([v, l]) => (
+          <button key={v} className={`vx-chip ${filter === v ? 'active' : ''}`} onClick={() => setFilter(v)}>{l}</button>
+        ))}
       </div>
 
       <div className="vx-card" style={{ overflow: 'hidden' }}>
-        <div style={{ overflowX: 'auto' }}>
-          <table className="vx-table">
-            <thead>
-              <tr>
-                <th>SKU</th>
-                <th>Name</th>
-                <th style={{ textAlign: 'right' }}>Inventory</th>
-                <th>Channels</th>
-                <th>Status</th>
-                <th>Last sync</th>
-                <th style={{ textAlign: 'right' }}>Price</th>
-                <th style={{ width: 40 }}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.length === 0 ? (
-                <tr><td colSpan={8} style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>No products match your search.</td></tr>
-              ) : filtered.map(p => (
-                <tr key={p.sku}>
-                  <td className="mono">{p.sku}</td>
-                  <td style={{ fontWeight: 500, maxWidth: 240 }} className="truncate">{p.name}</td>
-                  <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: p.inventory === 0 ? 700 : 500, color: p.inventory === 0 ? 'var(--red)' : p.inventory < 20 ? 'var(--amber)' : 'var(--text-primary)' }}>
-                    {p.inventory.toLocaleString()}
-                  </td>
-                  <td><div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>{p.channels.map(channelTag)}</div></td>
-                  <td>{statusBadge(p.status)}</td>
-                  <td style={{ color: 'var(--text-muted)', fontSize: 12.5 }}>{p.last_sync}</td>
-                  <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{p.price}</td>
-                  <td>
-                    <button className="vx-btn vx-btn-ghost" style={{ padding: 5 }}><MoreHorizontal size={14} /></button>
-                  </td>
+        {products === null ? <LoadingRows rows={6} cols={6} /> : !filtered.length ? (
+          <EmptyState icon={Package} title={search ? 'No products match your search' : 'No products yet'}
+            sub={search ? 'Try a different name or SKU.' : 'Create your first product to start syncing it to channels.'}
+            action={!search && <button className="vx-btn vx-btn-primary vx-btn-sm" onClick={openCreate}><Plus size={13} /> New product</button>} />
+        ) : (
+          <div className="vx-table-wrap">
+            <table className="vx-table">
+              <thead>
+                <tr>
+                  <th>SKU</th><th>Name</th><th>Category</th><th className="right">On hand</th><th className="right">Available</th><th>Status</th><th>Updated</th><th style={{ width: 44 }} />
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div style={{ padding: '10px 16px', borderTop: '1px solid var(--border)', fontSize: 12, color: 'var(--text-muted)', display: 'flex', justifyContent: 'space-between' }}>
-          <span>Showing {filtered.length} of {DEMO_PRODUCTS.length} products</span>
-          <span>Last full sync: 3 minutes ago</span>
-        </div>
+              </thead>
+              <tbody>
+                {filtered.map((p) => {
+                  const lv = levels[p.sku]
+                  const avail = lv?.quantity_available ?? 0
+                  return (
+                    <tr key={p.id}>
+                      <td className="mono" style={{ fontWeight: 600 }}>{p.sku}</td>
+                      <td style={{ fontWeight: 500, maxWidth: 280, color: 'var(--text)' }}>
+                        <div className="truncate">{p.name}</div>
+                        {p.variants?.length > 0 && <div className="xs muted">{p.variants.length} variant(s)</div>}
+                      </td>
+                      <td>{p.category || <span className="muted">—</span>}</td>
+                      <td className="num">{lv?.quantity_on_hand ?? '—'}</td>
+                      <td className="num" style={{ fontWeight: avail === 0 ? 700 : 500, color: avail === 0 ? 'var(--red)' : avail <= 5 ? 'var(--amber)' : 'var(--text-2)' }}>{avail}</td>
+                      <td><Badge tone={statusBadge(p.status)} dot>{p.status}</Badge></td>
+                      <td style={{ color: 'var(--text-4)', fontSize: 12 }}>{timeAgo(p.updated_at)}</td>
+                      <td>
+                        <button className="vx-icon-btn sm" title="Edit" onClick={() => openEdit(p)}><Pencil size={13} /></button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
+
+      {/* Create / edit modal */}
+      <Modal open={createOpen || !!editTarget} onClose={() => { setCreateOpen(false); setEditTarget(null) }}
+        title={editTarget ? `Edit ${editTarget.sku}` : 'New product'}
+        footer={
+          <>
+            <button className="vx-btn vx-btn-secondary" onClick={() => { setCreateOpen(false); setEditTarget(null) }}>Cancel</button>
+            <button className="vx-btn vx-btn-primary" disabled={busy} onClick={save}>{busy ? 'Saving…' : editTarget ? 'Save changes' : 'Create product'}</button>
+          </>
+        }>
+        {formErr && <div className="vx-form-error">{formErr}</div>}
+        <Field label="SKU" hint={editTarget ? 'SKU is the catalog key and cannot be changed here.' : undefined}>
+          <input className="vx-input" value={form.sku} disabled={!!editTarget} onChange={(e) => setForm({ ...form, sku: e.target.value })} required />
+        </Field>
+        <Field label="Name"><input className="vx-input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></Field>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <Field label="Category"><input className="vx-input" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="e.g. Skincare" /></Field>
+          <Field label="Status">
+            <select className="vx-select" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+              <option value="draft">Draft</option><option value="active">Active</option><option value="archived">Archived</option>
+            </select>
+          </Field>
+        </div>
+        <Field label="Description"><textarea className="vx-textarea" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></Field>
+      </Modal>
     </div>
   )
 }

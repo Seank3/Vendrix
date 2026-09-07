@@ -1,0 +1,51 @@
+name: Deploy
+
+# Deploys on push to main — but only runs the jobs whose secrets exist.
+#  1. Netlify   → needs NETLIFY_AUTH_TOKEN + NETLIFY_SITE_ID
+#  2. Render    → needs RENDER_DEPLOY_HOOK_URL (optional — Render Blueprint
+#                 auto-deploys when the repo is connected, so this is a backup
+#                 path for manual/skip-build services)
+#
+# Add secrets in GitHub → Settings → Secrets and variables → Actions.
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  netlify:
+    name: Deploy console → Netlify
+    if: ${{ secrets.NETLIFY_AUTH_TOKEN != '' && secrets.NETLIFY_SITE_ID != '' }}
+    runs-on: ubuntu-latest
+    environment: production
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install deps & build
+        run: npm ci && npm run build
+        env:
+          VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL || 'https://vendrix-api.onrender.com/api/v1' }}
+
+      - name: Deploy to Netlify
+        run: npx netlify-cli deploy --prod --dir dist --site "$NETLIFY_SITE_ID" --auth "$NETLIFY_AUTH_TOKEN"
+        env:
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+
+  render:
+    name: Trigger Render deploy (API + worker)
+    if: ${{ secrets.RENDER_DEPLOY_HOOK_URL != '' }}
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Hit Render deploy hook
+        run: curl -fsS -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"

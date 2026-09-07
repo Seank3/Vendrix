@@ -1,163 +1,177 @@
-import React, { useState, useEffect } from 'react'
-import { BarChart3, TrendingUp, ShoppingBag, Users, Calendar } from 'lucide-react'
-import { getAnalyticsData, IS_DEMO } from '../data/demoData'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import { BarChart2, ShoppingCart, AlertTriangle, Activity, RefreshCw, Package } from 'lucide-react'
 import { analyticsAPI } from '../services/api'
+import { useToastStore } from '../store/toast'
+import { PageHeader, StatCard, Badge, EmptyState, LoadingRows, fetchError, timeAgo, statusTone } from '../components/ui'
 
-const Skeleton = ({ w = '100%', h = 16, style = {} }) => (
-  <div className="vx-skeleton" style={{ width: w, height: h, ...style }} />
-)
+const DAYS_OPTIONS = [7, 14, 30, 90]
 
-const MetricCard = ({ title, value, sub, icon: Icon, color, delay = 0 }) => {
-  const colors = {
-    blue:   { bg: 'rgba(61,142,240,0.1)',  fg: '#60a5fa' },
-    green:  { bg: 'rgba(16,185,129,0.1)', fg: '#34d399' },
-    purple: { bg: 'rgba(168,85,247,0.1)', fg: '#c084fc' },
-    amber:  { bg: 'rgba(245,158,11,0.1)', fg: '#fbbf24' },
-  }
-  const c = colors[color] || colors.blue
-  return (
-    <div className="vx-card vx-card-hover animate-fade-up" style={{ padding: '1.35rem', animationDelay: `${delay}ms` }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.85rem' }}>
-        <div style={{ width: 34, height: 34, borderRadius: 8, background: c.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Icon size={16} color={c.fg} />
-        </div>
-        <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.03em' }}>{title}</span>
-      </div>
-      <div style={{ fontFamily: '"Bricolage Grotesque", system-ui, sans-serif', fontSize: '1.65rem', fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1 }}>{value}</div>
-      {sub && <div style={{ fontSize: '0.76rem', color: 'var(--text-muted)', marginTop: 5 }}>{sub}</div>}
-    </div>
-  )
-}
-
-const BarChartViz = ({ data = [], labels = [], color = '#3d8ef0' }) => {
-  const max = Math.max(...data, 1)
-  return (
-    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 180, padding: '0 4px' }}>
-      {data.slice(-20).map((v, i) => {
-        const label = labels.slice(-20)[i] || ''
-        const h = (v / max) * 100
-        return (
-          <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', height: '100%', justifyContent: 'flex-end' }}
-            title={`${label}: ${v}`}
-          >
-            <div style={{
-              width: '100%', height: `${h}%`, minHeight: 3,
-              background: i === data.slice(-20).length - 1
-                ? color
-                : `rgba(61,142,240,${0.2 + (i / data.slice(-20).length) * 0.5})`,
-              borderRadius: '3px 3px 0 0',
-              transition: `height 0.7s cubic-bezier(0.16,1,0.3,1) ${i * 20}ms`,
-              cursor: 'default',
-            }} />
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-const Analytics = () => {
-  const [data, setData]     = useState(null)
+export default function Analytics() {
+  const [days, setDays] = useState(30)
+  const [overview, setOverview] = useState(null)
+  const [byChannel, setByChannel] = useState(null)
+  const [skuPerf, setSkuPerf] = useState(null)
+  const [failures, setFailures] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [range, setRange]   = useState('30d')
+  const toast = useToastStore()
 
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true)
-      try {
-        const d = await analyticsAPI.getOverview(range)
-        setData(d)
-      } catch {
-        if (IS_DEMO) {
-          await new Promise(r => setTimeout(r, 500))
-          setData(getAnalyticsData())
-        }
-      } finally {
-        setLoading(false)
-      }
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const [ov, bc, sp, sf] = await Promise.all([
+        analyticsAPI.getOverview(),
+        analyticsAPI.ordersByChannel(days),
+        analyticsAPI.skuPerformance(days),
+        analyticsAPI.syncFailures(),
+      ])
+      setOverview(ov)
+      setByChannel(bc || [])
+      setSkuPerf(sp || [])
+      setFailures(sf || [])
+    } catch (e) {
+      toast.error(fetchError(e, 'Could not load analytics.'))
+    } finally { setLoading(false) }
+  }, [days])
+
+  useEffect(() => { load() }, [load])
+
+  const chart = useMemo(() => {
+    // group raw snapshots by channel, then by day
+    const byDay = {}
+    ;(byChannel || []).forEach((s) => {
+      byDay[s.period_start] = byDay[s.period_start] || {}
+      byDay[s.period_start][s.channel] = s.count
+    })
+    const daysArr = Object.keys(byDay).sort()
+    const channels = [...new Set((byChannel || []).map((s) => s.channel))]
+    const totals = daysArr.map((d) => Object.values(byDay[d]).reduce((a, b) => a + b, 0))
+    const max = Math.max(1, ...totals)
+    return {
+      labels: daysArr.map((d) => new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })),
+      totals,
+      max,
+      channels,
+      series: channels.map((c) => ({
+        channel: c,
+        values: daysArr.map((d) => byDay[d][c] || 0),
+      })),
     }
-    load()
-  }, [range])
+  }, [byChannel])
+
+  const topSku = useMemo(() => [...(skuPerf || [])].sort((a, b) => b.total_qty - a.total_qty).slice(0, 8), [skuPerf])
 
   return (
-    <div>
-      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
-        <div>
-          <h2 style={{ fontFamily: '"Bricolage Grotesque", system-ui, sans-serif', fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 0.3rem', letterSpacing: '-0.02em' }}>Analytics</h2>
-          <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', margin: 0 }}>Track performance and business insights</p>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Calendar size={14} style={{ color: 'var(--text-muted)' }} />
-          <select
-            value={range}
-            onChange={e => setRange(e.target.value)}
-            style={{
-              background: 'var(--surface-overlay)', border: '1px solid var(--surface-border)',
-              borderRadius: 8, color: 'var(--text-primary)', padding: '0.45rem 0.85rem',
-              fontSize: '0.82rem', fontFamily: 'inherit', cursor: 'pointer', outline: 'none',
-            }}
-          >
-            <option value="7d">Last 7 days</option>
-            <option value="30d">Last 30 days</option>
-            <option value="90d">Last 90 days</option>
-          </select>
-        </div>
-      </div>
-
-      {/* Metric cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.75rem' }}>
-        <MetricCard title="Total Revenue" value={loading ? '…' : `$${(data?.summary?.totalRevenue || 0).toLocaleString()}`} sub="Selected period" icon={TrendingUp} color="blue" delay={0} />
-        <MetricCard title="Total Orders"  value={loading ? '…' : (data?.summary?.totalOrders || 0).toLocaleString()} sub="Orders processed" icon={ShoppingBag} color="green" delay={60} />
-        <MetricCard title="Avg Order Value" value={loading ? '…' : `$${data?.summary?.averageOrderValue || 0}`} sub="Per transaction" icon={BarChart3} color="purple" delay={120} />
-        <MetricCard title="Conversion Rate" value={loading ? '…' : data?.summary?.conversionRate || '0%'} sub="Visitor to buyer" icon={Users} color="amber" delay={180} />
-      </div>
-
-      {/* Charts */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1rem', marginBottom: '1.75rem' }}>
-        <div className="vx-card animate-fade-up" style={{ padding: '1.5rem', animationDelay: '220ms' }}>
-          <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '1.25rem' }}>Revenue Trend</div>
-          {loading
-            ? <Skeleton h={180} />
-            : <BarChartViz data={data?.chartData?.revenue || []} labels={data?.chartData?.labels || []} color="#3d8ef0" />
-          }
-        </div>
-
-        <div className="vx-card animate-fade-up" style={{ padding: '1.5rem', animationDelay: '280ms' }}>
-          <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '1.25rem' }}>Daily Orders</div>
-          {loading
-            ? <Skeleton h={180} />
-            : <BarChartViz data={data?.chartData?.projects || []} labels={data?.chartData?.labels || []} color="#34d399" />
-          }
-        </div>
-      </div>
-
-      {/* Top products */}
-      <div className="vx-card animate-fade-up" style={{ animationDelay: '340ms', overflow: 'hidden' }}>
-        <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--surface-border)' }}>
-          <span style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-primary)' }}>Top Products</span>
-        </div>
-        {loading ? (
-          <div style={{ padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {[1,2,3].map(i => <Skeleton key={i} h={20} />)}
-          </div>
-        ) : (
-          <table className="vx-table">
-            <thead><tr><th>#</th><th>Product</th><th>Sales</th><th style={{ textAlign: 'right' }}>Revenue</th></tr></thead>
-            <tbody>
-              {(data?.topProducts || []).map((p, i) => (
-                <tr key={i}>
-                  <td style={{ color: 'var(--text-muted)', fontFamily: '"JetBrains Mono", monospace', fontSize: '0.78rem' }}>0{i+1}</td>
-                  <td style={{ fontWeight: 500 }}>{p.name}</td>
-                  <td>{p.sales?.toLocaleString()} units</td>
-                  <td style={{ textAlign: 'right', fontWeight: 700, color: '#34d399' }}>${p.revenue?.toLocaleString()}</td>
-                </tr>
+    <div className="vx-page">
+      <PageHeader title="Analytics" sub="Orders, inventory and sync health over time."
+        crumbs={['Analytics']}
+        actions={
+          <>
+            <div style={{ display: 'flex', gap: 4, background: 'var(--surface-3)', borderRadius: 8, padding: 3 }}>
+              {DAYS_OPTIONS.map((d) => (
+                <button key={d} className={`vx-chip ${days === d ? 'active' : ''}`} style={{ border: 'none', height: 26, padding: '0 9px', fontSize: 11.5, background: days === d ? 'var(--surface)' : 'transparent' }}
+                  onClick={() => setDays(d)}>{d}d</button>
               ))}
-            </tbody>
-          </table>
+            </div>
+            <button className="vx-btn vx-btn-secondary" onClick={load}><RefreshCw size={13} className={loading ? 'vx-spin' : ''} /> Refresh</button>
+          </>
+        } />
+
+      <div className="grid grid-4" style={{ gap: 14, marginBottom: 16 }}>
+        <StatCard icon={ShoppingCart} label="Orders today" value={overview?.orders_today ?? '…'} sub="all channels" tone="blue" />
+        <StatCard icon={ShoppingCart} label="Orders (7 days)" value={overview?.orders_week ?? '…'} sub="rolling week" tone="brand" />
+        <StatCard icon={AlertTriangle} label="Unresolved sync failures" value={overview?.sync_failures_unresolved ?? '…'} sub="need attention" tone={(overview?.sync_failures_unresolved || 0) > 0 ? 'red' : 'green'} />
+        <StatCard icon={Activity} label="Events today" value={overview?.events_today ?? '…'} sub="domain events" tone="purple" />
+      </div>
+
+      <div className="grid" style={{ gridTemplateColumns: '1.25fr 1fr', gap: 14 }} id="vx-analytics-grid">
+        <style>{`@media(max-width:980px){#vx-analytics-grid{grid-template-columns:1fr !important;}}`}</style>
+
+        {/* Orders by channel */}
+        <div className="vx-card" style={{ overflow: 'hidden' }}>
+          <div className="vx-card-head">
+            <span className="vx-card-title"><BarChart2 size={15} /> Orders by channel — last {days} days</span>
+          </div>
+          <div className="vx-card-body">
+            {loading ? <div className="vx-bars">{Array.from({ length: 12 }).map((_, i) => <div key={i} className="vx-skel" style={{ flex: 1, height: '100%' }} />)}</div>
+              : !chart.labels.length ? <EmptyState icon={BarChart2} title="No order data yet" sub="Orders ingested from channels will chart here." />
+              : (
+                <>
+                  <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 14 }}>
+                    {chart.channels.map((c) => (
+                      <span key={c} className="small fw-600" style={{ color: 'var(--text-3)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span className="vx-dot vx-dot-brand" style={{ background: 'var(--brand)' }} /> {c}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="vx-bars">
+                    {chart.totals.map((t, i) => (
+                      <div key={i} className="vx-bar" style={{ height: `${Math.max(3, (t / chart.max) * 100)}%` }}>
+                        <span className="tip">{t}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
+                    <span className="xs muted">{chart.labels[0]}</span>
+                    <span className="xs muted">{chart.labels[Math.floor(chart.labels.length / 2)]}</span>
+                    <span className="xs muted">{chart.labels[chart.labels.length - 1]}</span>
+                  </div>
+                </>
+              )}
+          </div>
+        </div>
+
+        {/* SKU performance */}
+        <div className="vx-card" style={{ overflow: 'hidden' }}>
+          <div className="vx-card-head"><span className="vx-card-title"><Package size={15} /> Units sold by SKU — {days}d</span></div>
+          {loading ? <LoadingRows rows={5} cols={2} /> : !topSku.length ? (
+            <EmptyState icon={Package} title="No sales data" sub="Units sold appear here as orders are ingested." />
+          ) : (
+            <div style={{ padding: '6px 16px 12px' }}>
+              {topSku.map((s, i) => {
+                const max = topSku[0].total_qty || 1
+                return (
+                  <div key={s.sku} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0' }}>
+                    <span className="mono xs" style={{ width: 22, color: 'var(--text-4)' }}>{i + 1}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div className="small fw-600 truncate">{s.sku}</div>
+                      <div style={{ height: 5, background: 'var(--surface-3)', borderRadius: 3, marginTop: 4, overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${(s.total_qty / max) * 100}%`, background: 'var(--brand)', borderRadius: 3 }} />
+                      </div>
+                    </div>
+                    <span className="num fw-600" style={{ fontSize: 13 }}>{s.total_qty}</span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Sync failures */}
+      <div className="vx-card" style={{ overflow: 'hidden', marginTop: 14 }}>
+        <div className="vx-card-head"><span className="vx-card-title"><AlertTriangle size={15} /> Sync failures</span></div>
+        {loading ? <LoadingRows rows={3} cols={4} /> : !failures?.length ? (
+          <EmptyState icon={AlertTriangle} title="No sync failures" sub="Every sync job is healthy. ✨" />
+        ) : (
+          <div className="vx-table-wrap">
+            <table className="vx-table">
+              <thead><tr><th>Platform</th><th>Job type</th><th>Error</th><th className="right">Retries</th><th>Status</th><th>When</th></tr></thead>
+              <tbody>
+                {failures.slice(0, 10).map((f) => (
+                  <tr key={f.id}>
+                    <td><Badge tone="gray">{f.platform}</Badge></td>
+                    <td style={{ fontWeight: 500 }}>{f.job_type.replace('_', ' ')}</td>
+                    <td className="truncate" style={{ maxWidth: 320, color: 'var(--red)' }}>{f.error_message}</td>
+                    <td className="num">{f.retry_count}</td>
+                    <td><Badge tone={statusTone(f.resolved ? 'resolved' : 'failed')} dot>{f.resolved ? 'resolved' : 'unresolved'}</Badge></td>
+                    <td style={{ color: 'var(--text-4)', fontSize: 12, whiteSpace: 'nowrap' }}>{timeAgo(f.created_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>
   )
 }
-
-export default Analytics

@@ -12,6 +12,7 @@ import Integrations from './pages/Integrations'
 import Organizations from './pages/Organizations'
 import Analytics from './pages/Analytics'
 import Events from './pages/Events'
+import Users from './pages/Users'
 import Settings from './pages/Settings'
 
 const ProtectedRoute = ({ children }) => {
@@ -21,11 +22,21 @@ const ProtectedRoute = ({ children }) => {
     setIsAuthenticated(!!localStorage.getItem('auth_token'))
     setLoading(false)
   }, [])
-  if (loading) return <div style={{ minHeight: '100vh', background: '#FAFAFA', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ color: '#64748B', fontSize: 14 }}>Loading…</span></div>
+  if (loading) {
+    return (
+      <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+        <span className="vx-spinner" /> <span style={{ color: 'var(--text-4)', fontSize: 13 }}>Loading Vendrix…</span>
+      </div>
+    )
+  }
   return isAuthenticated ? children : <Navigate to="/login" replace />
 }
 
-const Protected = ({ children }) => <ProtectedRoute><DashboardLayout>{children}</DashboardLayout></ProtectedRoute>
+const Protected = ({ children }) => (
+  <ProtectedRoute>
+    <DashboardLayout>{children}</DashboardLayout>
+  </ProtectedRoute>
+)
 
 function App() {
   return (
@@ -40,6 +51,7 @@ function App() {
         <Route path="/organizations" element={<Protected><Organizations /></Protected>} />
         <Route path="/analytics"     element={<Protected><Analytics /></Protected>} />
         <Route path="/events"        element={<Protected><Events /></Protected>} />
+        <Route path="/users"         element={<Protected><Users /></Protected>} />
         <Route path="/settings"      element={<Protected><Settings /></Protected>} />
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
       </Routes>

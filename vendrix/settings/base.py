@@ -66,16 +66,29 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'vendrix.wsgi.application'
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': config('DB_NAME', default='vendrix'),
-        'USER': config('DB_USER', default='vendrix'),
-        'PASSWORD': config('DB_PASSWORD', default='vendrix'),
-        'HOST': config('DB_HOST', default='localhost'),
-        'PORT': config('DB_PORT', default='5432'),
+# Database — prefer DATABASE_URL (Render/Supabase/Railway hand you a connection URL),
+# otherwise fall back to individual DB_* variables.
+DATABASE_URL = config('DATABASE_URL', default='')
+if DATABASE_URL:
+    import dj_database_url
+
+    DATABASES = {
+        'default': dj_database_url.parse(DATABASE_URL, conn_max_age=60),
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': config('DB_NAME', default='vendrix'),
+            'USER': config('DB_USER', default='vendrix'),
+            'PASSWORD': config('DB_PASSWORD', default='vendrix'),
+            'HOST': config('DB_HOST', default='localhost'),
+            'PORT': config('DB_PORT', default='5432'),
+            # 'require' for managed providers (Supabase); 'prefer' locally
+            'OPTIONS': {'sslmode': config('DB_SSLMODE', default='prefer')},
+            'CONN_MAX_AGE': 60,
+        }
+    }
 
 AUTH_USER_MODEL = 'identity.User'
 

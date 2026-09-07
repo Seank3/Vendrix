@@ -1,0 +1,95 @@
+# ─────────────────────────────────────────────────────────────────
+# Render Blueprint — Vendrix (new stack: root Django project)
+#
+# Create blueprint from this repo in the Render dashboard:
+#   New → Blueprint → pick this repo → apply.
+#
+# Notes:
+#  • Free-tier Postgres on Render is DELETED after 30 days — upgrade
+#    the `vendrix-db` plan (basic-256mb) or swap to Supabase for prod.
+#  • Set CREDENTIALS_ENCRYPTION_KEY manually on vendrix-api (see
+#    DEPLOYMENT.md) — a random string will not be a valid Fernet key.
+#  • Set CORS_ALLOWED_ORIGINS manually to your frontend URL(s).
+#  • To use Supabase instead of Render Postgres: delete the `databases`
+#    block and set DATABASE_URL on both services yourself.
+# ─────────────────────────────────────────────────────────────────
+
+services:
+  # ── API (Django + Gunicorn) ───────────────────────────────────
+  - type: web
+    name: vendrix-api
+    runtime: python
+    plan: free                     # spins down after 15 min idle (fine for dev/demo)
+    buildCommand: pip install -r requirements.txt && python manage.py collectstatic --noinput
+    startCommand: python manage.py migrate --noinput && gunicorn vendrix.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120
+    healthCheckPath: /health/
+    autoDeploy: true
+    envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: vendrix.settings.production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: CREDENTIALS_ENCRYPTION_KEY
+        sync: false                # set manually — must be a Fernet key
+      - key: ALLOWED_HOSTS
+        value: ".onrender.com"
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false                # e.g. https://vendrix-console.netlify.app
+      - key: DATABASE_URL
+        fromService:
+          type: pgsql
+          name: vendrix-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: vendrix-redis
+          property: connectionString
+
+  # ── Celery worker (sync jobs + domain events) ────────────────
+  - type: worker
+    name: vendrix-worker
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: celery -A vendrix worker --loglevel=info --concurrency=2
+    autoDeploy: true
+    envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: vendrix.settings.production
+      - key: SECRET_KEY
+        fromService:
+          type: web
+          name: vendrix-api
+          envVarKey: SECRET_KEY
+        sync: false
+      - key: CREDENTIALS_ENCRYPTION_KEY
+        fromService:
+          type: web
+          name: vendrix-api
+          envVarKey: CREDENTIALS_ENCRYPTION_KEY
+        sync: false
+      - key: ALLOWED_HOSTS
+        value: ".onrender.com"
+      - key: DATABASE_URL
+        fromService:
+          type: pgsql
+          name: vendrix-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: vendrix-redis
+          property: connectionString
+
+  # ── Redis (Celery broker + Django cache) ─────────────────────
+  - type: redis
+    name: vendrix-redis
+    plan: free                     # 25 MB — fine for a queue; upgrade for prod
+    ipAllowList: []                # private network only
+
+databases:
+  - name: vendrix-db
+    databaseName: vendrix
+    user: vendrix
+    plan: free                     # deleted after 30 days on free tier!

@@ -69,7 +69,7 @@ def _increment_metric(organization_id, metric_type, dimension, dimension_value, 
         dimension_value=dimension_value,
         period='daily',
         period_start=period_start,
-        defaults={'value': Decimal('0'), 'count': 0},
+        defaults={'value': Decimal('0'), 'count': 1},
     )
     if not created:
         MetricSnapshot.objects.filter(pk=snapshot.pk).update(count=F('count') + 1)

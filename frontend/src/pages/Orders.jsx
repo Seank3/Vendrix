@@ -1,152 +1,180 @@
-import React, { useState, useEffect } from 'react'
-import { Search, SlidersHorizontal, Package, ArrowUpDown } from 'lucide-react'
-import { getRecentOrders, IS_DEMO } from '../data/demoData'
-import { projectsAPI } from '../services/api'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import { ShoppingCart, Plus, RefreshCw, Search } from 'lucide-react'
+import { ordersAPI, integrationsAPI } from '../services/api'
+import { useToastStore } from '../store/toast'
+import { PageHeader, Badge, Modal, Field, EmptyState, LoadingRows, fetchError, money, timeAgo, statusTone } from '../components/ui'
 
-const Skeleton = ({ w = '100%', h = 16, style = {} }) => (
-  <div className="vx-skeleton" style={{ width: w, height: h, ...style }} />
-)
+const STATUSES = ['received', 'processing', 'fulfilled', 'cancelled']
 
-const statusBadge = (status) => {
-  const map = {
-    completed:   'vx-badge vx-badge-success',
-    pending:     'vx-badge vx-badge-warning',
-    in_progress: 'vx-badge vx-badge-info',
-    cancelled:   'vx-badge vx-badge-danger',
-  }
-  return map[status?.toLowerCase()] || 'vx-badge vx-badge-muted'
-}
+export default function Orders() {
+  const [orders, setOrders] = useState(null)
+  const [integrations, setIntegrations] = useState([])
+  const [search, setSearch] = useState('')
+  const [status, setStatus] = useState('all')
+  const [channel, setChannel] = useState('all')
+  const [busyId, setBusyId] = useState(null)
+  const [createOpen, setCreateOpen] = useState(false)
+  const [form, setForm] = useState({ channel: 'shopify', external_id: '', customer_name: '', sku: '', quantity: 1, unit_price: '' })
+  const [err, setErr] = useState('')
+  const toast = useToastStore()
 
-const Orders = () => {
-  const [orders, setOrders]       = useState([])
-  const [loading, setLoading]     = useState(true)
-  const [search, setSearch]       = useState('')
-  const [statusFilter, setStatus] = useState('')
-
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const data = await projectsAPI.getProjects()
-        const raw = data.results || data || []
-        setOrders(raw.map(o => ({
-          id: o.order_id || `#${o.id}`,
-          customer: o.customer_name || 'N/A',
-          platform: o.platform || 'Shopify',
-          status: o.status,
-          amount: o.total_amount || 0,
-          date: o.created_at,
-        })))
-      } catch {
-        if (IS_DEMO) {
-          await new Promise(r => setTimeout(r, 500))
-          setOrders(getRecentOrders().map(o => ({
-            id: o.id, customer: o.customer,
-            platform: 'Shopify', status: o.status,
-            amount: o.amount, date: o.date, product: o.product,
-          })))
-        }
-      } finally {
-        setLoading(false)
-      }
+  const load = useCallback(async () => {
+    try {
+      const [os, is] = await Promise.all([ordersAPI.list(), integrationsAPI.list().catch(() => [])])
+      setOrders(os || [])
+      setIntegrations(is || [])
+    } catch (e) {
+      toast.error(fetchError(e, 'Could not load orders.'))
+      setOrders([])
     }
-    load()
   }, [])
 
-  const filtered = orders.filter(o => {
-    const q = search.toLowerCase()
-    const matchSearch = !q || o.id?.toLowerCase().includes(q) || o.customer?.toLowerCase().includes(q) || o.product?.toLowerCase().includes(q)
-    const matchStatus = !statusFilter || o.status === statusFilter
-    return matchSearch && matchStatus
-  })
+  useEffect(() => { load() }, [load])
+
+  const channels = useMemo(() => [...new Set((orders || []).map((o) => o.channel))], [orders])
+  const counts = useMemo(() => {
+    const c = { all: (orders || []).length }
+    STATUSES.forEach((s) => { c[s] = (orders || []).filter((o) => o.status === s).length })
+    return c
+  }, [orders])
+
+  const filtered = useMemo(() => {
+    let list = orders || []
+    const q = search.trim().toLowerCase()
+    if (q) list = list.filter((o) => (o.external_id + ' ' + (o.customer?.name || '') + ' ' + (o.customer?.email || '')).toLowerCase().includes(q))
+    if (status !== 'all') list = list.filter((o) => o.status === status)
+    if (channel !== 'all') list = list.filter((o) => o.channel === channel)
+    return list
+  }, [orders, search, status, channel])
+
+  const changeStatus = async (o, newStatus) => {
+    if (o.status === newStatus) return
+    setBusyId(o.id)
+    try {
+      await ordersAPI.updateStatus(o.id, newStatus)
+      toast.success(`Order #${o.external_id} → ${newStatus}.`)
+      setOrders((prev) => prev.map((x) => (x.id === o.id ? { ...x, status: newStatus } : x)))
+    } catch (e) {
+      toast.error(fetchError(e, 'Could not update order status.'))
+    } finally { setBusyId(null) }
+  }
+
+  const createOrder = async (e) => {
+    e.preventDefault()
+    setErr('')
+    try {
+      const line_items = [{
+        sku: form.sku, name: form.sku, quantity: parseInt(form.quantity, 10) || 1,
+        unit_price: form.unit_price || '0',
+      }]
+      const integ = integrations.find((i) => i.platform === form.channel)
+      await ordersAPI.create({
+        channel: form.channel,
+        external_id: form.external_id,
+        customer: { name: form.customer_name, email: '' },
+        line_items,
+        integration_id: integ?.id || null,
+      })
+      toast.success(`Order #${form.external_id} ingested.`)
+      setCreateOpen(false)
+      setForm({ channel: 'shopify', external_id: '', customer_name: '', sku: '', quantity: 1, unit_price: '' })
+      await load()
+    } catch (ex) {
+      setErr(fetchError(ex))
+    }
+  }
 
   return (
-    <div>
-      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
-        <div>
-          <h2 style={{ fontFamily: '"Bricolage Grotesque", system-ui, sans-serif', fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 0.3rem', letterSpacing: '-0.02em' }}>Orders</h2>
-          <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', margin: 0 }}>Manage and track all your orders</p>
+    <div className="vx-page">
+      <PageHeader title="Orders" sub="Normalized orders from every connected channel."
+        crumbs={['Orders']}
+        actions={
+          <>
+            <button className="vx-btn vx-btn-secondary" onClick={load}><RefreshCw size={13} /> Refresh</button>
+            <button className="vx-btn vx-btn-primary" onClick={() => { setErr(''); setCreateOpen(true) }}><Plus size={14} /> Manual order</button>
+          </>
+        } />
+
+      <div className="vx-toolbar">
+        <div className="vx-searchbox">
+          <Search size={13} />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search order # or customer…" style={{ width: 260 }} />
         </div>
-        <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
-          <div style={{ position: 'relative' }}>
-            <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-            <input
-              className="vx-input"
-              placeholder="Search orders…"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              style={{ paddingLeft: '2.2rem', width: 220 }}
-            />
-          </div>
-          <select
-            value={statusFilter}
-            onChange={e => setStatus(e.target.value)}
-            style={{
-              background: 'var(--surface-overlay)', border: '1px solid var(--surface-border)',
-              borderRadius: 8, color: 'var(--text-primary)', padding: '0.55rem 0.85rem',
-              fontSize: '0.82rem', fontFamily: 'inherit', cursor: 'pointer', outline: 'none',
-            }}
-          >
-            <option value="">All statuses</option>
-            <option value="pending">Pending</option>
-            <option value="in_progress">In Progress</option>
-            <option value="completed">Completed</option>
-            <option value="cancelled">Cancelled</option>
-          </select>
-        </div>
+        {channels.map((c) => (
+          <button key={c} className={`vx-chip ${channel === c ? 'active' : ''}`} onClick={() => setChannel(channel === c ? 'all' : c)}>{c}</button>
+        ))}
+        <div style={{ flex: 1 }} />
+        {STATUSES.map((s) => (
+          <button key={s} className={`vx-chip ${status === s ? 'active' : ''}`} onClick={() => setStatus(status === s ? 'all' : s)}>
+            {s} <span className="count">{counts[s]}</span>
+          </button>
+        ))}
       </div>
 
-      <div className="vx-card animate-fade-up" style={{ overflow: 'hidden' }}>
-        <div style={{ overflowX: 'auto' }}>
-          <table className="vx-table">
-            <thead>
-              <tr>
-                <th>Order ID</th>
-                <th>Customer</th>
-                <th>Platform</th>
-                <th>Product</th>
-                <th>Status</th>
-                <th style={{ textAlign: 'right' }}>Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                [1,2,3,4,5].map(i => (
-                  <tr key={i}>
-                    {[1,2,3,4,5,6].map(j => (
-                      <td key={j}><Skeleton h={14} w="75%" /></td>
-                    ))}
+      <div className="vx-card" style={{ overflow: 'hidden' }}>
+        {orders === null ? <LoadingRows rows={6} cols={7} /> : !filtered.length ? (
+          <EmptyState icon={ShoppingCart} title={search || status !== 'all' || channel !== 'all' ? 'No orders match your filters' : 'No orders yet'}
+            sub={search || status !== 'all' || channel !== 'all' ? 'Try clearing the filters.' : 'Fetch orders from a connected channel or create a manual order.'} />
+        ) : (
+          <div className="vx-table-wrap">
+            <table className="vx-table">
+              <thead>
+                <tr><th>Order</th><th>Channel</th><th>Customer</th><th className="right">Items</th><th className="right">Total</th><th>Status</th><th>Received</th><th>Move to</th></tr>
+              </thead>
+              <tbody>
+                {filtered.map((o) => (
+                  <tr key={o.id}>
+                    <td className="mono" style={{ fontWeight: 600 }}>{o.external_id}</td>
+                    <td><Badge tone="gray">{o.channel}</Badge></td>
+                    <td>
+                      <div style={{ fontWeight: 500, color: 'var(--text)' }}>{o.customer?.name || '—'}</div>
+                      {o.customer?.email && <div className="xs muted">{o.customer.email}</div>}
+                    </td>
+                    <td className="num">{o.line_items?.reduce((s, l) => s + l.quantity, 0) || 0}</td>
+                    <td className="num" style={{ fontWeight: 600 }}>{money(o.total, o.currency)}</td>
+                    <td><Badge tone={statusTone(o.status)} dot>{o.status}</Badge></td>
+                    <td style={{ color: 'var(--text-4)', fontSize: 12 }}>{timeAgo(o.created_at)}</td>
+                    <td>
+                      <select className="vx-select" style={{ height: 30, fontSize: 12.5, width: 130, paddingRight: 26 }}
+                        value={o.status} disabled={busyId === o.id}
+                        onChange={(e) => changeStatus(o, e.target.value)}>
+                        {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </td>
                   </tr>
-                ))
-              ) : filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={6} style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
-                    <Package size={36} style={{ opacity: 0.3, margin: '0 auto 10px', display: 'block' }} />
-                    No orders found
-                  </td>
-                </tr>
-              ) : filtered.map(order => (
-                <tr key={order.id}>
-                  <td style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '0.8rem', color: 'var(--accent)' }}>{order.id}</td>
-                  <td style={{ fontWeight: 500 }}>{order.customer}</td>
-                  <td style={{ color: 'var(--text-secondary)' }}>
-                    <span className="vx-badge vx-badge-muted">{order.platform}</span>
-                  </td>
-                  <td style={{ color: 'var(--text-secondary)' }}>{order.product || '—'}</td>
-                  <td><span className={statusBadge(order.status)}>{order.status?.replace('_', ' ')}</span></td>
-                  <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--text-primary)' }}>${Number(order.amount).toFixed(2)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {!loading && filtered.length > 0 && (
-          <div style={{ padding: '0.875rem 1.5rem', borderTop: '1px solid var(--surface-border)', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-            Showing {filtered.length} of {orders.length} orders
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
+
+      <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="Ingest manual order"
+        footer={
+          <>
+            <button className="vx-btn vx-btn-secondary" onClick={() => setCreateOpen(false)}>Cancel</button>
+            <button className="vx-btn vx-btn-primary" onClick={createOrder}>Create order</button>
+          </>
+        }>
+        {err && <div className="vx-form-error">{err}</div>}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <Field label="Channel">
+            <select className="vx-select" value={form.channel} onChange={(e) => setForm({ ...form, channel: e.target.value })}>
+              {[...new Set([...channels, 'shopify', 'jumia', 'etsy', 'amazon'])].map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </Field>
+          <Field label="External ID"><input className="vx-input" value={form.external_id} onChange={(e) => setForm({ ...form, external_id: e.target.value })} placeholder="e.g. ORD-2201" required /></Field>
+        </div>
+        <Field label="Customer name"><input className="vx-input" value={form.customer_name} onChange={(e) => setForm({ ...form, customer_name: e.target.value })} /></Field>
+        <div className="vx-divider" />
+        <div className="xs muted fw-600" style={{ marginBottom: 8 }}>LINE ITEM</div>
+        <Field label="SKU"><input className="vx-input" value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} placeholder="e.g. SHEA-500" required /></Field>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <Field label="Quantity"><input className="vx-input" type="number" min="1" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} /></Field>
+          <Field label="Unit price"><input className="vx-input" value={form.unit_price} onChange={(e) => setForm({ ...form, unit_price: e.target.value })} placeholder="12.50" /></Field>
+        </div>
+        <p className="hint" style={{ fontSize: 11.5, color: 'var(--text-4)' }}>Stock is reserved automatically when the order is ingested.</p>
+      </Modal>
     </div>
   )
 }
-
-export default Orders
